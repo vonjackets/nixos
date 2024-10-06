@@ -2,10 +2,7 @@
   description = "A Nix flake that builds a basic environment containing essential tools for software development, intended to be used in shells, devcontainers, etc.";
 
   inputs = {
-    # Override the flake-utils default aarch64
     flake-utils.url = "github:numtide/flake-utils"; # Utility functions for Nix flakes
-    #flake-utils.inputs.systems.follows = "systems";
-    #systems.url = "github:nix-systems/aarch64-linux";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
 
@@ -17,7 +14,7 @@
       };
     in 
     {
-      defaultPackage = pkgs.buildEnv {
+      packages.default = pkgs.buildEnv {
         name = "devenv";
         #Define "system level" packages
         paths = with pkgs; [
