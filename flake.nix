@@ -2,11 +2,11 @@
   description = "A Nix flake that builds a basic environment containing essential tools for software development, intended to be used in shells, devcontainers, etc.";
 
   inputs = {
-    systems.url = "github:nix-systems/aarch64-linux";
-    flake-utils.url = "github:numtide/flake-utils"; # Utility functions for Nix flakes
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     # Override the flake-utils default aarch64
-    flake-utils.inputs.systems.follows = "systems";
+    flake-utils.url = "github:numtide/flake-utils"; # Utility functions for Nix flakes
+    #flake-utils.inputs.systems.follows = "systems";
+    #systems.url = "github:nix-systems/aarch64-linux";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
 
   outputs = { self, nixpkgs, flake-utils, systems }:
