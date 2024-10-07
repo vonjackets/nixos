@@ -19,7 +19,7 @@
         #Define "system level" packages
         paths = with pkgs; [
           # -- Basic Required Files --
-          bash # Basic bash to run bare essential code
+          bashInteractiveFHS 
           uutils-coreutils-noprefix # Essential GNU utilities (ls, cat, etc.)
 
           gzip # Compression utility
