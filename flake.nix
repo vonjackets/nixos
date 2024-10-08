@@ -27,11 +27,6 @@
 
           # -- FISH! --
           fish
-          fishPlugins.bass
-          fishPlugins.bobthefish
-          fishPlugins.foreign-env
-          fishPlugins.grc
-          
 
           # -- OpenSSL --
           cacert
@@ -47,8 +42,6 @@
           
           # -- Development tools --
 
-
-        
           # Misc. tools
           gnused
           which
