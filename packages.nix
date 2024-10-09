@@ -26,7 +26,9 @@ let
         gnumake
         
         # -- Development tools --
-    
+        poetry
+        uv
+        
         # Misc. tools
         gnused
         which
