@@ -52,6 +52,6 @@ let
 # Return the list of packages
 in 
 {
-    paths
-    fishConfig
+    paths = paths;
+    fishConfig = fishConfig;
 }
