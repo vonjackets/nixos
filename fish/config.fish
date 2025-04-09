@@ -99,3 +99,63 @@ function fish_prompt
     printf '%s@%s %s%s%s > ' $USER $hostname \
         (set_color $fish_color_cwd) (prompt_pwd) (set_color normal)
 end
+
+function nix-update-remote
+    set -l dns_name $argv[1]
+
+    if test -z "$dns_name"
+        echo "Usage: nix-update-remote <ec2-public-dns>"
+        return 1
+    end
+
+    # Resolve the IP from DNS
+    set -l ip (dig +short $dns_name | head -n 1)
+
+    if test -z "$ip"
+        echo "Failed to resolve IP from DNS: $dns_name"
+        return 1
+    end
+
+    echo "Resolved IP: $ip"
+
+    set -l alias nix-ec2
+    set -l ssh_key ~/.ssh/nix-remote
+
+    # Clean up known_hosts entries
+    echo "Cleaning up old SSH known_hosts entries..."
+    ssh-keygen -R $dns_name > /dev/null
+    ssh-keygen -R $ip > /dev/null
+
+    # Update ~/.ssh/config
+    echo "Updating SSH config entry for '$alias'..."
+    mkdir -p ~/.ssh
+    grep -v "Host $alias" ~/.ssh/config 2>/dev/null | grep -v "HostName" > ~/.ssh/config.new
+
+    echo "
+Host $alias
+    HostName $dns_name
+    User root
+    IdentityFile $ssh_key
+    StrictHostKeyChecking accept-new
+    UserKnownHostsFile ~/.ssh/known_hosts
+" >> ~/.ssh/config.new
+
+    mv ~/.ssh/config.new ~/.ssh/config
+    chmod 600 ~/.ssh/config
+
+    # Copy SSH key + config to root (for nix-daemon)
+    echo "Copying SSH key and config to root..."
+    sudo mkdir -p /var/root/.ssh
+    sudo cp ~/.ssh/config /var/root/.ssh/config
+    sudo cp $ssh_key /var/root/.ssh/
+    sudo cp $ssh_key.pub /var/root/.ssh/
+    sudo chmod 600 /var/root/.ssh/config /var/root/.ssh/nix-remote
+    sudo chmod 644 /var/root/.ssh/nix-remote.pub
+
+    # Confirm root can connect
+    echo "Testing root ssh connection to $alias..."
+    sudo ssh -o StrictHostKeyChecking=accept-new $alias "echo Connection successful from root"
+
+    echo "✅ Remote builder '$alias' is ready for use in Nix builds."
+end
+
