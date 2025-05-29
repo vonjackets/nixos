@@ -99,6 +99,7 @@ function fish_prompt
     printf '%s@%s %s%s%s > ' $USER $hostname \
         (set_color $fish_color_cwd) (prompt_pwd) (set_color normal)
 end
+
 # Define a function named "switch-context"
 function switch-context
     # Check if cluster name argument is provided
@@ -154,5 +155,3 @@ function switch_namespace
     else
         echo "Failed to switch namespace."
     end
-end
-
