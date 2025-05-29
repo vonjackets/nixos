@@ -20,14 +20,14 @@
     openFirewall = true;
   };
 
-virtualisation.docker.enable = true;
+  virtualisation.docker.enable = true;
 
   # Create a default user for development
   users.users.vcoates = {
     isNormalUser = true;
     home = "/home/vcoates";
     description = "";
-    extraGroups = [ "networkmanager" "wheel" "docker" ]; # Allow sudo access
+    extraGroups = [ "networkmanager" "wheel" "docker" ];
     # openssh.authorizedKeys.keys = [];
   };
 
@@ -39,18 +39,31 @@ virtualisation.docker.enable = true;
 
   # Set up development tools and utilities
   environment.systemPackages = with pkgs; [
-    fish                # fish
+    fish                
     git                 # Version control
     vim                 # Text editor
-    tmux                # Terminal multiplexer
     curl                # Command-line tool for HTTP requests
     wget                # File download utility
     htop                # Interactive process viewer
-    podman              # containers
     rustup              # Rust programming language manager
     gcc                 # C/C++ compiler
     gdb                 # Debugger
+    cmake
+    kubectl
+    helm
+
     docker-compose
+    openssl
+
+    #extras
+    bat
+    
+    jq
+    yq
+    sops
+    git-crypt
+    nmap
+    
   ];
 
   # Firewall configuration
