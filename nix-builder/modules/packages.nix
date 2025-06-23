@@ -55,12 +55,10 @@ in
     man-pages
     man-pages-posix
     ncurses
-    nvim
     procps
     ps
     ripgrep
     rsync
-    rustlings
     strace
     tree
     tree-sitter
