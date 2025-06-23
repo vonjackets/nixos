@@ -62,5 +62,6 @@
     secretKeyFile = "/etc/nix/cache-priv-key.pem";
   };
 
+  environment.systemPackages = import ./packages.nix {inherit pkgs; };
   environment.etc."nix/cache-priv-key.pem".source = ./secrets/cache-priv-key.pem;
 }
