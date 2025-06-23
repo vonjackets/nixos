@@ -29,5 +29,5 @@
       system = system;
       modules = modules;
     };
-  }
+  };
 }
