@@ -4,7 +4,7 @@
 let
 in
 {
-  packages = with pkgs; [
+  systemPackages = with pkgs; [
     # -- Basic Required Files --
     bash # Basic bash to run bare essential code
     glibcLocalesUtf8
