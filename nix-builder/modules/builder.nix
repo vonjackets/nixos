@@ -1,4 +1,5 @@
-{ config, pkgs, ... }:
+## Core configuration for the builder machine
+{ pkgs, ... }:
 
 {
   imports = [
