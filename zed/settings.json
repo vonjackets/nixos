@@ -21,7 +21,7 @@
   },
   "terminal": {
     "shell": {
-      "program": "/usr/local/bin/fish"
+      "program": "nu"
     }
   }
 }
