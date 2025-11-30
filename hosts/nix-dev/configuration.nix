@@ -8,17 +8,18 @@
   system.stateVersion = "24.05";
   boot.loader.grub.enable = true;
   boot.loader.grub.device = "/dev/xvda";
-  
+
   # Set your timezone
   time.timeZone = "UTC";
   # Enable SSH for remote access
 
-  services.openssh = {
-    enable = true;
-    permitRootLogin = "yes";
-    passwordAuthentication = false;
-    openFirewall = true;
-  };
+  programs.ssh.startAgent = true;
+  # services.openssh = {
+  #   enable = true;
+  #   permitRootLogin = "yes";
+  #   passwordAuthentication = false;
+  #   openFirewall = true;
+  # };
 
   virtualisation.docker.enable = true;
 
@@ -39,7 +40,7 @@
 
   # Set up development tools and utilities
   environment.systemPackages = with pkgs; [
-    fish                
+    fish
     git                 # Version control
     vim                 # Text editor
     curl                # Command-line tool for HTTP requests
@@ -57,13 +58,13 @@
 
     #extras
     bat
-    
+
     jq
     yq
     sops
     git-crypt
     nmap
-    
+
   ];
 
   # Firewall configuration

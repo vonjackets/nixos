@@ -90,8 +90,6 @@
     packages = with pkgs; [
       kdePackages.kate
     ];
-
-
   };
 
   # enable passwordless sudo, this is the only user account we need
@@ -119,12 +117,12 @@
     };
   };
 
-  # Install firefox.
-  programs.firefox.enable = true;
+  # # Install firefox.
+  # programs.firefox.enable = true;
 
-  # start the ssh agent on login
+  # # start the ssh agent on login
   programs.ssh.startAgent = true;
-  #enable and configure nushell
+
   # List packages installed in system profile. To search, run:
   environment.systemPackages = with pkgs; [
        # -- Basic Required Files --
