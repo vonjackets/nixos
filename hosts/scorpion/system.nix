@@ -90,16 +90,24 @@
     packages = with pkgs; [
       kdePackages.kate
     ];
+
   };
+  # create a podman group
+  users.groups.podman = {
+     name = "podman";
+   };
 
-  # enable passwordless sudo, this is the only user account we need
-  # security.sudo.extraRules = [
-  #   {
-  #     users = ["vcaaron"];
-  #     commands = [ { command = "ALL"; options = "NOPASSWD"; } ];
-
-  #   }
-  # ];
+  # enable passwordless sudo for podman runs
+  security.sudo.extraRules = [
+    {
+      users = [ "vcaaron" ];
+      commands = [
+        { command = "/run/current-system/sw/bin/podman"; options = [ "NOPASSWD" ]; }
+      ];
+    }
+  ];
+  # Needed by rootless containers for proper UID/GID mapping
+  security.unprivilegedUsernsClone = true;
 
   nix.settings = {
    trusted-users = ["root" "vcaaron"];
@@ -110,8 +118,10 @@
   # enable useage of containers, I prefer podman.
   virtualisation = {
     containers.enable = true;
+    oci-containers.backend = "podman";
     podman = {
       enable = true;
+      autoPrune.enable = true;
       dockerCompat = true;
       defaultNetwork.settings.dns_enabled = true; # Required for containers under podman-compose to be able to talk to each other.
     };
@@ -148,7 +158,10 @@
       openssl.dev
 
       # -- Development tools --
+      podman-tui # status of containers in the terminal
+      docker-compose # starts group of containers for dev
       zoxide # better than cd
+      minikube # local k8s testing
       kubectl
       fluxcd
       bat
@@ -182,9 +195,11 @@
       tree-sitter
       which
 
+      # dhall - actually good configuration
       dhall
       dhall-yaml
       dhall-json
+      dhall-lsp-server
 
       # -- Compilers, Etc. --
       cmake
@@ -195,6 +210,9 @@
       util-linux
       sops
       envsubst
+      # needed for rootless storage + networking layers with podman
+      slirp4netns
+      fuse-overlayfs
   ];
 
   # Some programs need SUID wrappers, can be configured further or are

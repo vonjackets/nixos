@@ -1,5 +1,6 @@
 # ~/.config/nushell/config.nu
 use std/util "path add"
+
 #import custom modules
 def --env source-env [file: path = ".env.nuon"] {
     let vars = open $file

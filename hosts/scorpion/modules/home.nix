@@ -12,7 +12,18 @@
 
   # dotfile symlinks
   home.file.".config/git/config".source = ./programs/.gitconfig;
-  home.file.".config/nushell/config.nu".source = ./programs/nushell/config.nu;
+  # setup nushell stuff
+  home.file.".config/nushell/config.nu" = {
+    source = ./programs/nushell/config.nu;
+    force = true; #clobber whatevers there
+  };
+
+  home.file.".config/ghostty/config" = {
+    source = ./programs/ghostty.config;
+    force = true;
+  };
+
+
   # TODO: I don't keep an env.nu file, but if I did...
   # home.file.".config/nushell/env.nu".source    = ./programs/nushell/env.nu;
 
