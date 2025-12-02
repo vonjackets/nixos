@@ -1,4 +1,4 @@
-#NixOS
+# NixOS
 
 Welcome, this repo is meant to serve as my landing pad for when I inevitably need to flatten and rebuild a machine.
 It's mean to be both that and a playground for trying out some nixos stuff.
@@ -10,7 +10,7 @@ For example, from here in the root of the project, try running `mask build agent
 this will give you all the binaries we have defined for the project.
 
 
-## rebuild
+## rebuild (FLAKE)
   > Rebuild the system using a given path, then prepare version control and view diffs
 ```bash
 #!/usr/bin/env bash

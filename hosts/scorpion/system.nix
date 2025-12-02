@@ -179,6 +179,7 @@
       gnugrep
       iproute2
       jq
+      yq
       lsof
       man
       man-db

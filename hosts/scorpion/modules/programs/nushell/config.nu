@@ -66,6 +66,9 @@ alias s = sudo
 alias m = mask
 alias p = podman
 alias k = kubectl
+alias dyaml = dhall-to-yaml --file
+alias djson = dhall-to-json --file
+alias dfmt = dhall format
 # --- Handy utilities ---
 # configure to use zoxide
 source ~/.config/nushell/.zoxide.nu
