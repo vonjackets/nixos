@@ -1,0 +1,5 @@
+
+[custom.weather]
+command = "echo $WEATHER_INFO"
+when = "true"
+format = "$output"

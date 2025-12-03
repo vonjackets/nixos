@@ -1,6 +1,39 @@
 # ~/.config/nushell/config.nu
 use std/util "path add"
 
+# use community modules we'll have had pulled in by the time this config is used. See home.nix
+use modules/weather/get-weather.nu get_weather
+use modules/docker/mod.nu *
+use modules/kubernetes/mod.nu *
+
+export def greet [] {
+    print "Current Weather"
+    print $env.WEATHER_INFO
+}
+export def update_weather --env [] {
+    # populate env var once
+    let w = (get_weather | select "Weather Location" Temperature "Feels Like" "Forecast Day 1")
+
+    # turn record -> list of values
+    let vals = ($w | values)
+
+    # join into a single string
+    let joined = ($vals | str join " | ")
+
+    # export
+    load-env { WEATHER_INFO: $"($joined)" }
+}
+
+update_weather
+# Starship prompt integration
+# Bootstrap it and get it to show us the weather on startup.
+$env.STARSHIP_SHELL = "nu"
+$env.STARSHIP_CONFIG = $"($env.HOME)/.config/starship.toml"
+
+
+$env.PROMPT_INDICATOR = ""
+$env.PROMPT_INDICATOR_VI_INSERT = ""
+$env.PROMPT_INDICATOR_VI_NORMAL = ""
 #import custom modules
 def --env source-env [file: path = ".env.nuon"] {
     let vars = open $file
@@ -72,3 +105,6 @@ alias dfmt = dhall format
 # --- Handy utilities ---
 # configure to use zoxide
 source ~/.config/nushell/.zoxide.nu
+
+# print greeting
+greet
