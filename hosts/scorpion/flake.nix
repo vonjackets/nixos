@@ -17,8 +17,8 @@
         scorpion = nixpkgs.lib.nixosSystem {
           inherit system;
           modules = [
-            ./system.nix
-            # Inject Home Manager as a NixOS module
+            ./modules/system.nix
+            # Inje`t Home Manager as a NixOS module
             home-manager.nixosModules.home-manager
             # Wire home.nix
             {
