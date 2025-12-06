@@ -1,5 +1,16 @@
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
 
-[custom.weather]
-command = "echo $WEATHER_INFO"
-when = "true"
-format = "$output"
+[git_branch]
+symbol = " "
+truncation_length = 50
+truncation_symbol = "…/"
+
+[cmd_duration]
+min_time = 2000  # only show if >2s
+format = " took [$duration]($style)"
+
+[time]
+disabled = false
+format = "[$time]($style) "
