@@ -32,7 +32,10 @@ in
 
 
   # example: Firefox
-  programs.firefox.enable = true;
+  programs.firefox = {
+    enable = true;
+    package = pkgs.firefox;
+  };
 
   # dotfile symlinks
   home.file.".config/git/config".source = ./programs/.gitconfig;

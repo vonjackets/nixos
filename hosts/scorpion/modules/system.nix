@@ -7,6 +7,7 @@
       ./hardware-configuration.nix
     ];
 
+
   # we've got a bluetooth adapater, mightaswell use it
   #
   hardware.bluetooth.enable = true;
@@ -17,6 +18,12 @@
   networking.hostName = "scorpion"; # Define your hostname.
 
   networking.networkmanager.enable = true;
+
+  networking.firewall = {
+    # allow discovery for other devices on the network
+    # REFERNECE: https://nixos.wiki/wiki/Spotify
+    allowedTCPPorts = [ 57621 ];
+  };
 
   # Set your time zone.
   time.timeZone = "America/New_York";
@@ -224,6 +231,9 @@
       hunspellDicts.th_TH
       # hyphens
       hyphenDicts.en_US  # British English
+
+      # music
+      spotify
   ];
 
   system.stateVersion = "25.05";
