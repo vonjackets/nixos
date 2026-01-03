@@ -40,9 +40,6 @@ in
   # dotfile symlinks
   home.file.".config/git/config".source = ./programs/.gitconfig;
   # setup nushell stuff
-  # TODO: I REALLY REALLY want those goddman nushell scripts with all the helpers and aliases,
-  # reinventing the wheel sucks
-  # We should just fetch them all (or at least the ones we want) from the github directly and add them here figure out how.
   home.file.".config/nushell/config.nu" = {
     source = ./programs/nushell/config.nu;
     force = true; #clobber whatevers there
@@ -58,8 +55,6 @@ in
     source = ./programs/ghostty.config;
     force = true;
   };
-
-
 
   home.packages = [
     pkgs.signal-desktop

@@ -25,15 +25,7 @@ export def update_weather --env [] {
 }
 
 update_weather
-# Starship prompt integration
-# Bootstrap it and get it to show us the weather on startup.
-$env.STARSHIP_SHELL = "nu"
-$env.STARSHIP_CONFIG = $"($env.HOME)/.config/starship.toml"
 
-
-$env.PROMPT_INDICATOR = ""
-$env.PROMPT_INDICATOR_VI_INSERT = ""
-$env.PROMPT_INDICATOR_VI_NORMAL = ""
 #import custom modules
 def --env source-env [file: path = ".env.nuon"] {
     let vars = open $file
@@ -89,7 +81,23 @@ $env.NO_PROXY = "localhost,127.0.0.1,10.96.0.0/12,192.168.59.0/24,192.168.49.0/2
 $env.config.show_banner = false
 $env.EDITOR = "vim"
 
-# --- Aliases you might port from fish ---
+
+def create_left_prompt [] {
+    starship prompt --cmd-duration $env.CMD_DURATION_MS $'--status=($env.LAST_EXIT_CODE)'
+}
+
+$env.STARSHIP_SHELL = "nu"
+$env.STARSHIP_CONFIG = $"($env.HOME)/.config/starship/starship.toml"
+# Use nushell functions to define the right and left prompt
+$env.PROMPT_COMMAND = { || create_left_prompt }
+$env.PROMPT_COMMAND_RIGHT = ""
+# The prompt indicators are environmental variables that represent
+# the state of the prompt
+$env.PROMPT_INDICATOR = ""
+$env.PROMPT_INDICATOR_VI_INSERT = ": "
+$env.PROMPT_INDICATOR_VI_NORMAL = "〉"
+$env.PROMPT_MULTILINE_INDICATOR = "::: "
+
 alias ls = eza --icons --group-directories-first
 alias ll = eza -lh --git
 alias cat = bat

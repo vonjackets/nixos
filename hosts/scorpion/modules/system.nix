@@ -223,6 +223,12 @@
       slirp4netns
       fuse-overlayfs
 
+      # Rust and its tooling
+      # We're gonna just always get the latest nightly for now.
+      (rust-bin.selectLatestNightlyWith (toolchain: toolchain.default))
+      rust-analyzer
+
+
       # set up the office suite
       libreoffice-qt
       #need these for spellchecking
@@ -234,6 +240,10 @@
 
       # music
       spotify
+
+      # AI tooling
+      claude-code
+
   ];
 
   system.stateVersion = "25.05";

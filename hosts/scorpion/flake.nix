@@ -9,31 +9,43 @@
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
     # proper firefox overlay
     nixpkgs-mozilla.url = github:mozilla/nixpkgs-mozilla;
+    # sadjow's claude code vs nixpkgs
+    # We'll evaluate to see how much we like it.
+    claude-code.url = "github:sadjow/claude-code-nix";
+
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
   };
-
-  outputs = { self, nixpkgs, home-manager, nixpkgs-mozilla, ... }:
-    let
+  outputs = { self, nixpkgs, home-manager, nixpkgs-mozilla, claude-code, rust-overlay, ... }:
+  {
+    nixosConfigurations.scorpion = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; overlays = [ nixpkgs-mozilla.overlay ]; };
-    in {
-      nixosConfigurations = {
-        scorpion = nixpkgs.lib.nixosSystem {
-          inherit system;
-          modules = [
-            ./modules/system.nix
-            ./modules/unfree.nix
-            # Inje`t Home Manager as a NixOS module
-            home-manager.nixosModules.home-manager
-            # Wire home.nix
-            {
-                home-manager.useUserPackages = true;
-                home-manager.useGlobalPkgs = true;
 
-                home-manager.users.vcaaron = import ./modules/home.nix;
-            }
+      modules = [
+        # Core system config
+        ./modules/system.nix
+        ./modules/unfree.nix
+
+        # Overlays belong here
+        {
+          nixpkgs.overlays = [
+            rust-overlay.overlays.default
+            claude-code.overlays.default
+            nixpkgs-mozilla.overlay
           ];
-        };
-      };
+        }
+
+        # Home Manager
+        home-manager.nixosModules.home-manager
+        {
+          home-manager.useUserPackages = true;
+          home-manager.useGlobalPkgs = true;
+          home-manager.users.vcaaron = import ./modules/home.nix;
+        }
+      ];
     };
+  };
 }
