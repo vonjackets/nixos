@@ -126,6 +126,13 @@
   # enable useage of containers, I prefer podman.
   virtualisation = {
     containers.enable = true;
+    containers.storage.settings = {
+      storage = {
+        driver = "overlay";
+        graphroot = "/data/podman/storage";
+        runroot = "/data/podman/run";
+      };
+  };
     oci-containers.backend = "podman";
     podman = {
       enable = true;
@@ -135,8 +142,13 @@
     };
   };
 
-  # # Install firefox.
-  # programs.firefox.enable = true;
+  # create directories
+  systemd.tmpfiles.rules = [
+    "d /data/podman 0755 root root -"
+    "d /data/podman/storage 0755 root root -"
+    "d /data/podman/tmp 1777 root root -"
+    "d /data/podman/run 1777 root root -"
+  ];
 
   # # start the ssh agent on login
   programs.ssh.startAgent = true;
@@ -224,8 +236,6 @@
       fuse-overlayfs
 
       # Rust and its tooling
-      # We're gonna just always get the latest nightly for now.
-      (rust-bin.selectLatestNightlyWith (toolchain: toolchain.default))
       rust-analyzer
 
 
@@ -245,6 +255,9 @@
       claude-code
 
   ];
+
+  # environment.variables = {
+  # };
 
   system.stateVersion = "25.05";
 
