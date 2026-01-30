@@ -24,7 +24,6 @@ export def update_weather --env [] {
     load-env { WEATHER_INFO: $"($joined)" }
 }
 
-update_weather
 
 #import custom modules
 def --env source-env [file: path = ".env.nuon"] {
@@ -115,4 +114,4 @@ alias dfmt = dhall format
 source ~/.config/nushell/.zoxide.nu
 
 # print greeting
-greet
+# greet

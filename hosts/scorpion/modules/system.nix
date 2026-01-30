@@ -1,12 +1,22 @@
 
 { config, pkgs, ... }:
 
+let
+  auxDataDirectory = "/main";
+in
 {
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
     ];
 
+
+    # mout thi system's HDD to main, let it serve as our main auxillary data drive
+    fileSystems."/main" = {
+      device = "/dev/disk/by-uuid/38234746-832a-44cd-91c7-33aed2d1aacd";
+      fsType = "ext4";
+      options = [ "nofail" "x-systemd.automount" ];
+    };
 
   # we've got a bluetooth adapater, mightaswell use it
   #
@@ -129,8 +139,8 @@
     containers.storage.settings = {
       storage = {
         driver = "overlay";
-        graphroot = "/data/podman/storage";
-        runroot = "/data/podman/run";
+        graphroot = "${auxDataDirectory}/podman/storage";
+        runroot = "${auxDataDirectory}/podman/run";
       };
   };
     oci-containers.backend = "podman";
@@ -144,10 +154,10 @@
 
   # create directories
   systemd.tmpfiles.rules = [
-    "d /data/podman 0755 root root -"
-    "d /data/podman/storage 0755 root root -"
-    "d /data/podman/tmp 1777 root root -"
-    "d /data/podman/run 1777 root root -"
+    "d ${auxDataDirectory}/podman 0755 root root -"
+    "d ${auxDataDirectory}/podman/storage 0755 root root -"
+    "d ${auxDataDirectory}/podman/tmp 1777 root root -"
+    "d ${auxDataDirectory}/podman/run 1777 root root -"
   ];
 
   # # start the ssh agent on login
