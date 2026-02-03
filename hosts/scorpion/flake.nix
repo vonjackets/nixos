@@ -89,6 +89,8 @@
        RUSTC_LINKER = "clang-lld-wrapper";
        CC = "clang-lld-wrapper";
        CXX = "clang++";
+       PKG_CONFIG_PATH="${pkgs.openssl.dev}/lib/pkgconfig";
+       RUSTFLAGS="-Clinker=clang-lld-wrapper";
 
        shellHook = ''
          # Set up RUST_SRC_PATH so tools like rust-analyzer work
