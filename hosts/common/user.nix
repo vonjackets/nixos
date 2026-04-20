@@ -1,17 +1,25 @@
-let
-
-username = "vcoates";
-home = "/home/vcoates";
-# Create a default user for development
-vcoates = {
-  inherit home;
-  isNormalUser = true;
-  description = "";
-  extraGroups = [ "networkmanager" "wheel" "docker" ];
-  # openssh.authorizedKeys.keys = [];
-};
-
-in
+{ config, pkgs, ... }:
 {
-  inherit vcoates;
+  users.users.vcaaron = {
+    isNormalUser  = true;
+    description   = "vcaaron";
+    extraGroups   = [ "networkmanager" "wheel" "podman" ];
+    packages      = with pkgs; [
+      kdePackages.kate
+    ];
+  };
+
+  users.groups.podman.name = "podman";
+
+  security.sudo.extraRules = [
+    {
+      users = [ "vcaaron" ];
+      commands = [
+        {
+          command = "/run/current-system/sw/bin/podman";
+          options = [ "NOPASSWD" ];
+        }
+      ];
+    }
+  ];
 }
