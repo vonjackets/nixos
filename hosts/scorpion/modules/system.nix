@@ -10,14 +10,6 @@ in
       ./hardware-configuration.nix
     ];
 
-
-    # mout thi system's HDD to main, let it serve as our main auxillary data drive
-    fileSystems."/main" = {
-      device = "/dev/disk/by-uuid/38234746-832a-44cd-91c7-33aed2d1aacd";
-      fsType = "ext4";
-      options = [ "nofail" "x-systemd.automount" ];
-    };
-
   # we've got a bluetooth adapater, mightaswell use it
   #
   hardware.bluetooth.enable = true;
