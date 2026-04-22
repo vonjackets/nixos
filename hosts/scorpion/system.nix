@@ -30,6 +30,5 @@
     hunspellDicts.uk_UA
     hunspellDicts.th_TH
     hyphenDicts.en_US
-    claude-code
   ];
 }
