@@ -1,7 +1,4 @@
 { config, pkgs, ... }:
-let
-  auxDataDirectory = "/main";
-in
 {
   networking.hostName = "scorpion";
 
@@ -14,15 +11,15 @@ in
   # redirect podman storage to HDD
   virtualisation.containers.storage.settings.storage = {
     driver    = "overlay";
-    graphroot = "${auxDataDirectory}/podman/storage";
-    runroot   = "${auxDataDirectory}/podman/run";
+    graphroot = "/podman/storage";
+    runroot   = "/podman/run";
   };
 
   systemd.tmpfiles.rules = [
-    "d ${auxDataDirectory}/podman         0755 root root -"
-    "d ${auxDataDirectory}/podman/storage 0755 root root -"
-    "d ${auxDataDirectory}/podman/tmp     1777 root root -"
-    "d ${auxDataDirectory}/podman/run     1777 root root -"
+    "d /podman         0755 root root -"
+    "d /podman/storage 0755 root root -"
+    "d /podman/tmp     1777 root root -"
+    "d /podman/run     1777 root root -"
   ];
 
   # scorpion-specific packages — gaming, media, office
