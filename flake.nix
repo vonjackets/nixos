@@ -11,9 +11,14 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    plasma-manager = {
+      url = "github:nix-community/plasma-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.home-manager.follows = "home-manager";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, nixpkgs-mozilla, claude-code, rust-overlay, ... }:
+  outputs = { self, nixpkgs, home-manager, nixpkgs-mozilla, claude-code, rust-overlay, plasma-manager ,.. }:
   let
     sharedOverlays = [
       rust-overlay.overlays.default
@@ -32,6 +37,7 @@
         home-manager.useUserPackages = true;
         home-manager.useGlobalPkgs = true;
         home-manager.users.vcaaron = import ./hosts/common/home.nix;
+        home-manager.sharedModules = [ plasma-manager.homeManagerModules.plasma-manager ];
       }
     ];
   in

@@ -11,7 +11,12 @@ this will give you all the binaries we have defined for the project.
 
 
 ## rebuild (FLAKE)
-  > Rebuild the system using a given path, then prepare version control and view diffs
+  > Rebuild a host system using a given path, then prepare version control and view diffs
+    For example
+    `mask rebuild .#scorpion`
+    
+    `mask rebuild .#latitude`
+    
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail

@@ -19,18 +19,19 @@ let
       cp -r modules/kubernetes $out/
       cp -r modules/argx $out/kubernetes
       cp -r modules/lg $out/kubernetes
-      cp -r modules/weather $out/
       cp -r modules/docker $out/
     '';
 };
+
+  rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+    extensions = [ "rust-src" "rust-analyzer" "clippy" "rustfmt" ];
+  };
 in
 {
   home.username = "vcaaron"; # must match system user
 
   programs.home-manager.enable = true;
 
-
-  # example: Firefox
   programs.firefox = {
     enable = true;
     package = pkgs.firefox;
@@ -38,7 +39,7 @@ in
 
   programs.zed-editor = {
     enable = true;
-    extensions = [ "nix" "toml" "html" "python" ];
+    extensions = [ "nix" "toml" "html" "python" "nu" ];
     userSettings = {
       telemetry = {
         diagnostics = false;
@@ -49,8 +50,8 @@ in
       buffer_font_size = 16;
       theme = {
         mode = "system";
-        light = "Monokai Night";
-        dark = "One Dark";
+        light = "Gruvbox Light Soft";
+        dark = "Monokai Charcoal (red)";
       };
       terminal = {
         shell = {
@@ -62,7 +63,8 @@ in
       lsp = {
         rust-analyzer = {
           binary = {
-            path_lookup = true;
+            path = "${rustToolchain}/bin/rust-analyzer";
+            path_lookup = false;
           };
         };
         nix = {
@@ -97,10 +99,14 @@ in
 
   home.packages = [
     pkgs.signal-desktop
+    rustToolchain
   ];
   # TODO: We should configure zed here
   # TODO: I don't keep an env.nu file, but if I did...
   # home.file.".config/nushell/env.nu".source    = ./programs/nushell/env.nu;
 
   home.stateVersion = "25.05";
+  home.sessionVariables = {
+    RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+  };
 }

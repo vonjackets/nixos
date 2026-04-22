@@ -2,14 +2,9 @@
 use std/util "path add"
 
 # use community modules we'll have had pulled in by the time this config is used. See home.nix
-use modules/weather/get-weather.nu get_weather
 use modules/docker/mod.nu *
 use modules/kubernetes/mod.nu *
 
-export def greet [] {
-    print "Current Weather"
-    print $env.WEATHER_INFO
-}
 export def update_weather --env [] {
     # populate env var once
     let w = (get_weather | select "Weather Location" Temperature "Feels Like" "Forecast Day 1")

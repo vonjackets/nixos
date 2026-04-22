@@ -13,6 +13,7 @@
     starship
     atuin
     mask
+    just
     # -- OpenSSL --
     cacert
     dropbear
@@ -24,6 +25,7 @@
     docker-compose
     zoxide
     minikube
+    k9s
     kubectl
     fluxcd
     bat
@@ -51,7 +53,6 @@
     ps
     ripgrep
     rsync
-    rustlings
     strace
     tree
     tree-sitter
