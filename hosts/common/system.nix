@@ -3,6 +3,10 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
+
+  #Steam, Proton, and most native Linux games still ship 32-bit binaries or depend on 32-bit Mesa/driver libs, and without this Steam will just silently fail to launch most games
+  hardware.graphics.enable32Bit = true;
+
   networking.networkmanager.enable = true;
 
   time.timeZone = "America/New_York";

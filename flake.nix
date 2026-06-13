@@ -18,7 +18,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, nixpkgs-mozilla, claude-code, rust-overlay, plasma-manager ,.. }:
+  outputs = { self, nixpkgs, home-manager, nixpkgs-mozilla, claude-code, rust-overlay, plasma-manager , ... }:
   let
     sharedOverlays = [
       rust-overlay.overlays.default
@@ -56,6 +56,15 @@
         ./hosts/latitude/hardware-configuration.nix
         ./hosts/latitude/system.nix
       ];
+    };
+
+    nixosConfigurations.rainbow = nixpkgs.lib.nixosSystem {
+    system = "x86_64-linux";
+    modules = sharedModules ++ [
+      ./hosts/rainbow/hardware-configuration.nix
+      ./hosts/rainbow/system.nix
+    ];
+
     };
 
     devShells.x86_64-linux.rustStable = let
