@@ -74,5 +74,12 @@
     # -- Podman / container runtime deps --
     slirp4netns
     fuse-overlayfs
+    spotify
+    # office tools
+    libreoffice-qt
+    hunspell
+    hunspellDicts.uk_UA
+    hunspellDicts.th_TH
+    hyphenDicts.en_US
   ];
 }

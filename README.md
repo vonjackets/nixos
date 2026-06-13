@@ -21,11 +21,12 @@ this will give you all the binaries we have defined for the project.
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "[1/3] nixos-rebuild switch"
-sudo nixos-rebuild switch --flake "$FLAKE"
 
-echo "[2/3] git add"
+echo "[1/3] running git add -A to make files visible to git and nix"
 git add -A
+
+echo "[2/3] nixos-rebuild switch"
+sudo nixos-rebuild switch --flake "$FLAKE"
 
 echo "[3/3] git diff (staged)"
 git diff --cached --summary

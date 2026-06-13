@@ -21,14 +21,4 @@
     "d /podman/tmp     1777 root root -"
     "d /podman/run     1777 root root -"
   ];
-
-  # scorpion-specific packages — gaming, media, office
-  environment.systemPackages = with pkgs; [
-    spotify
-    libreoffice-qt
-    hunspell
-    hunspellDicts.uk_UA
-    hunspellDicts.th_TH
-    hyphenDicts.en_US
-  ];
 }

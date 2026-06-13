@@ -28,7 +28,6 @@
     sharedModules = [
       ./hosts/common/system.nix
       ./hosts/common/packages.nix
-
       ./hosts/common/user.nix
       ./hosts/common/unfree.nix
       { nixpkgs.overlays = sharedOverlays; }
@@ -36,35 +35,55 @@
       {
         home-manager.useUserPackages = true;
         home-manager.useGlobalPkgs = true;
-        home-manager.users.vcaaron = import ./hosts/common/home.nix;
-        home-manager.sharedModules = [ plasma-manager.homeManagerModules.plasma-manager ];
+        home-manager.sharedModules = [ plasma-manager.homeModules.plasma-manager ]; # renamed
       }
     ];
   in
   {
+    nixosConfigurations.rainbow = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = sharedModules ++ [
+        ./hosts/rainbow/hardware-configuration.nix
+        ./hosts/rainbow/system.nix
+        {
+          home-manager.users.vcaaron = {
+            imports = [
+              ./hosts/common/home.nix
+              ./hosts/rainbow/home.nix
+            ];
+          };
+        }
+      ];
+    };
     nixosConfigurations.scorpion = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = sharedModules ++ [
         ./hosts/scorpion/hardware-configuration.nix
         ./hosts/scorpion/system.nix
+        {
+          home-manager.users.vcaaron = {
+            imports = [
+              ./hosts/common/home.nix
+              ./hosts/scorpion/home.nix
+            ];
+          };
+        }
       ];
     };
-
     nixosConfigurations.latitude = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = sharedModules ++ [
         ./hosts/latitude/hardware-configuration.nix
         ./hosts/latitude/system.nix
+        {
+          home-manager.users.vcaaron = {
+            imports = [
+              ./hosts/common/home.nix
+              ./hosts/scorpion/home.nix
+            ];
+          };
+        }
       ];
-    };
-
-    nixosConfigurations.rainbow = nixpkgs.lib.nixosSystem {
-    system = "x86_64-linux";
-    modules = sharedModules ++ [
-      ./hosts/rainbow/hardware-configuration.nix
-      ./hosts/rainbow/system.nix
-    ];
-
     };
 
     devShells.x86_64-linux.rustStable = let
