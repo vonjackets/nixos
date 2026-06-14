@@ -23,6 +23,7 @@ set -euo pipefail
 
 
 echo "[1/3] running git add -A to make files visible to git and nix"
+echo "DID YOU UPDATE .gitinore ?"
 git add -A
 
 echo "[2/3] nixos-rebuild switch"

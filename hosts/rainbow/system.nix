@@ -25,7 +25,10 @@
     AllowHybridSleep = "no";
     AllowSuspendThenHibernate = "no";
   };
+
+  # modules from ../common that we might want for extra functionality
   imports = [
     ../common/gaming.nix
+    ../common/k3s.nix
   ];
 }
