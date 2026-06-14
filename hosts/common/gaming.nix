@@ -10,6 +10,7 @@
   programs.gamemode.enable = true;
 
   environment.systemPackages = with pkgs; [
+    headsetcontrol # needed for logitech peripherals
     mangohud
     protonup-qt
     lutris
@@ -17,4 +18,7 @@
     nvtopPackages.nvidia
     discord-ptb # discord for chats with the homies not needed on other machines
   ];
+
+  # enable invoking headsetcontrol w/o sudo
+  services.udev.packages = [ pkgs.headsetcontrol ];
 }

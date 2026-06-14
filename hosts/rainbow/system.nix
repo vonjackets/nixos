@@ -14,9 +14,17 @@
     open = true;                 # Ada Lovelace supports open kernel modules
     package = config.boot.kernelPackages.nvidiaPackages.stable;
     nvidiaSettings = true;
-    powerManagement.enable = false;  # desktop, no suspend/resume GPU power-state dance needed
+    powerManagement.enable = true; # prevent wayland and the plasma compisitor from crashing
   };
 
+  # Rainbow is a desktop, and sometimes we leave it for extended periods, no real point in letting it sleep since power is consistent
+  systemd.sleep.settings.Sleep = {
+
+    AllowSuspend = "no";
+    AllowHibernation = "no";
+    AllowHybridSleep = "no";
+    AllowSuspendThenHibernate = "no";
+  };
   imports = [
     ../common/gaming.nix
   ];
