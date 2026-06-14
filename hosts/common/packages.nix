@@ -1,6 +1,14 @@
 { pkgs, ... }:
+let
+
+rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+  extensions = [ "rust-src" "rust-analyzer" "clippy" "rustfmt" ];
+};
+
+in
 {
   environment.systemPackages = with pkgs; [
+
     # -- Basic Required Files --
     gnugrep
     gnused
@@ -8,6 +16,8 @@
     gzip
     ghostty
     nushell
+    nufmt
+    nu-lint
     vim
     zed-editor
     starship
@@ -65,12 +75,14 @@
     # -- Compilers, Etc. --
     cmake
     gnumake
+    gcc
     glibc
     grc
     pkg-config
     util-linux
     sops
     envsubst
+    rustToolchain
     # -- Podman / container runtime deps --
     slirp4netns
     fuse-overlayfs
@@ -81,5 +93,7 @@
     hunspellDicts.uk_UA
     hunspellDicts.th_TH
     hyphenDicts.en_US
+
+    signal-desktop
   ];
 }

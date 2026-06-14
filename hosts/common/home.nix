@@ -18,9 +18,6 @@ let
     '';
   };
 
-  rustToolchain = pkgs.rust-bin.stable.latest.default.override {
-    extensions = [ "rust-src" "rust-analyzer" "clippy" "rustfmt" ];
-  };
 in
 {
   imports = [ ./plasma.nix ];
@@ -54,36 +51,38 @@ in
       auto_update = false;
       lsp = {
         rust-analyzer.binary = {
-          path = "${rustToolchain}/bin/rust-analyzer";
-          path_lookup = false;
+          path_lookup = true;
         };
         nix.binary.path_lookup = true;
       };
     };
   };
 
-  home.file.".config/zed/themes/monokai-charcoal.json".source = ./programs/zed/themes/monokai-charcoal.json;
-  home.file.".config/git/config".source = ./programs/.gitconfig;
-  home.file.".config/nushell/config.nu" = {
-    source = ./programs/nushell/config.nu;
-    force = true;
+  programs.nushell = {
+    enable = true;
+    configFile.source = ./programs/nushell/config.nu;
   };
+
   home.file.".config/nushell/modules" = {
     source = nuScriptsSubset;
   };
+  # arbitrarilly set up env for cargo
+  home.file.".cargo/config.toml" = {
+    text = ''
+      [env]
+      PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig"
+    '';
+    force = true;
+  };
+  home.file.".config/zed/themes/monokai-charcoal.json".source = ./programs/zed/themes/monokai-charcoal.json;
+  home.file.".config/git/config".source = ./programs/.gitconfig;
   home.file.".config/starship/starship.toml".source = ./programs/starship.toml;
   home.file.".config/ghostty/config" = {
     source = ./programs/ghostty.config;
     force = true;
   };
-
-  home.packages = [
-    pkgs.signal-desktop
-    rustToolchain
-  ];
-
-  home.stateVersion = "25.05";
   home.sessionVariables = {
-    RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
-  };
+      PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+    };
+  home.stateVersion = "25.05";
 }

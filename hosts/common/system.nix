@@ -67,6 +67,7 @@
   security.unprivilegedUsernsClone = true;
 
   programs.ssh.startAgent = true;
+  programs.kdeconnect.enable = true;
 
   nix.settings = {
     trusted-users          = [ "root" "vcaaron" ];
@@ -74,4 +75,8 @@
   };
 
   system.stateVersion = "25.05";
+
+  environment.variables = {
+    PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+  };
 }
