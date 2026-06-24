@@ -9,6 +9,8 @@
 
   programs.gamemode.enable = true;
 
+  hardware.xpadneo.enable = true;
+
   environment.systemPackages = with pkgs; [
     headsetcontrol # needed for logitech peripherals
     mangohud

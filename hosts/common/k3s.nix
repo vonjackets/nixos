@@ -24,4 +24,8 @@
       ''--write-kubeconfig-mode "0644"''
     ];
   };
+
+  environment.variables = {
+    KUBECONFIG="etc/rancher/k3s/k3s.yaml";
+  };
 }
