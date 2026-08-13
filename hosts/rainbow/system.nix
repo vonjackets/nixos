@@ -34,9 +34,12 @@
     ../common/k3s.nix
   ];
 
-  environment.systemPackages = [
-     (pkgs.ollama.override {
-        acceleration = "cuda";
-      })
-    ];
+  services.ollama = {
+    enable = true;
+    package = pkgs.ollama-cuda;
+    environmentVariables = {
+      CUDA_VISIBLE_DEVICES = "0";
+      LD_LIBRARY_PATH = "${pkgs.cudaPackages.cudatoolkit}/lib:${pkgs.cudaPackages.cudatoolkit}/lib64";
+    };
+  };
 }
