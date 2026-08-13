@@ -33,4 +33,10 @@
     ../common/gaming.nix
     ../common/k3s.nix
   ];
+
+  environment.systemPackages = [
+     (pkgs.ollama.override {
+        acceleration = "cuda";
+      })
+    ];
 }

@@ -18,9 +18,6 @@
     enable = true;
     role = "server";
     extraFlags = toString [
-      # by default /etc/rancher/k3s/k3s.yaml is root-only,
-      # so kubectl/k9s as vcaaron gets permission-denied until you either sudo everything or fix this.
-      # 0644 makes it world-readable — fine for a single-user dev desktop,
       ''--write-kubeconfig-mode "0644"''
     ];
   };
