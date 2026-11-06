@@ -67,6 +67,18 @@ in
     loadSessionVariables = true;
   };
 
+  # commander-key isn't a default identity name, so ssh never offers it on
+  # its own. Point ssh at it and cache it in the agent (programs.ssh.startAgent)
+  # on first use, so no manual `ssh-add` is needed after a reboot.
+  programs.ssh = {
+    enable = true;
+    enableDefaultConfig = false;
+    settings."*" = {
+      IdentityFile = "~/.ssh/commander-key";
+      AddKeysToAgent = "yes";
+    };
+  };
+
   home.file.".config/nushell/modules" = {
     source = nuScriptsSubset;
   };
