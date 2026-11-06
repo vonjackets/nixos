@@ -40,11 +40,46 @@
   # NVIDIA + Proton tuning. NVAPI unlocks DLSS Frame Generation under Proton,
   # which is the single biggest win for AAA at 7680x2160 on a 12 GB card.
   # 10 GB shader cache keeps the big games from re-compiling after updates.
+  # LIBVA_DRIVER_NAME points VA-API clients (Firefox, mpv, OBS) at the
+  # NVIDIA-nvdec backend so HW video decode doesn't burn CPU during games.
   environment.sessionVariables = {
     __GL_SHADER_DISK_CACHE = "1";
     __GL_SHADER_DISK_CACHE_SIZE = "10737418240";
     PROTON_ENABLE_NVAPI = "1";
     PROTON_HIDE_NVIDIA_GPU = "0";
+    LIBVA_DRIVER_NAME = "nvidia";
+    NVD_BACKEND = "direct";
+    MOZ_DISABLE_RDD_SANDBOX = "1";
+  };
+
+  # Enable the NVIDIA VA-API shim so Firefox/Chromium/mpv can HW-decode via
+  # NVDEC. Needs enable32Bit for Steam-side consumers of libva.
+  hardware.graphics.extraPackages = with pkgs; [ nvidia-vaapi-driver ];
+
+  # Gaming-oriented kernel tuning.
+  #   swappiness=10   : prefer keeping game pages resident over swapping them.
+  #   vfs_cache_pressure=50 : hold inode/dentry cache longer (faster asset loads).
+  #   dirty_ratio/background : smaller to avoid big writeback stalls mid-frame.
+  #   net.*                : larger buffers for high-bandwidth online play + streaming.
+  boot.kernel.sysctl = {
+    "vm.swappiness" = 10;
+    "vm.vfs_cache_pressure" = 50;
+    "vm.dirty_ratio" = 10;
+    "vm.dirty_background_ratio" = 5;
+    "net.core.rmem_max" = 16777216;
+    "net.core.wmem_max" = 16777216;
+    "net.ipv4.tcp_rmem" = "4096 87380 16777216";
+    "net.ipv4.tcp_wmem" = "4096 65536 16777216";
+    "net.core.netdev_max_backlog" = 5000;
+  };
+
+  # zram-backed compressed swap. On a 32 GB box running Ollama + k3s + a game,
+  # shader-compile spikes can still pressure RAM; zstd-compressed zram is an
+  # order of magnitude faster than the on-disk swap partition.
+  zramSwap = {
+    enable = true;
+    algorithm = "zstd";
+    memoryPercent = 50;
   };
 
   services.ollama = {
