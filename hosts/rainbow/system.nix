@@ -34,6 +34,7 @@
   imports = [
     ../common/gaming.nix
     ../common/k3s.nix
+    ../common/incus.nix
   ];
 
   # NVIDIA + Proton tuning. NVAPI unlocks DLSS Frame Generation under Proton,
