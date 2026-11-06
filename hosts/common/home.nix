@@ -63,6 +63,8 @@ in
   programs.nushell = {
     enable = true;
     configFile.source = ./programs/nushell/config.nu;
+    # Adopt the 26.11 default: expose home.sessionVariables to nushell.
+    loadSessionVariables = true;
   };
 
   home.file.".config/nushell/modules" = {
