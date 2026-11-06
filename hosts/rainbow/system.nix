@@ -2,6 +2,9 @@
 {
   networking.hostName = "rainbow";
 
+  # Zen kernel: BORE scheduler + desktop-interactivity tuning. Worth it on
+  # Zen 4 for mixed gaming + desktop workloads. nvidia-open builds against it.
+  boot.kernelPackages = pkgs.linuxPackages_zen;
 
   hardware.bluetooth.enable = true;
   hardware.graphics = {
@@ -33,6 +36,16 @@
     ../common/gaming.nix
     ../common/k3s.nix
   ];
+
+  # NVIDIA + Proton tuning. NVAPI unlocks DLSS Frame Generation under Proton,
+  # which is the single biggest win for AAA at 7680x2160 on a 12 GB card.
+  # 10 GB shader cache keeps the big games from re-compiling after updates.
+  environment.sessionVariables = {
+    __GL_SHADER_DISK_CACHE = "1";
+    __GL_SHADER_DISK_CACHE_SIZE = "10737418240";
+    PROTON_ENABLE_NVAPI = "1";
+    PROTON_HIDE_NVIDIA_GPU = "0";
+  };
 
   services.ollama = {
     enable = true;
