@@ -91,9 +91,11 @@
   services.ollama = {
     enable = true;
     package = pkgs.ollama-cuda;
+    # ollama-cuda ships its own libcudart/libcublas next to its runners and
+    # finds them via RUNPATH. Don't set LD_LIBRARY_PATH to cudatoolkit: it
+    # shadows the bundled libs and drags ~3.2 GiB of CUDA into the closure.
     environmentVariables = {
       CUDA_VISIBLE_DEVICES = "0";
-      LD_LIBRARY_PATH = "${pkgs.cudaPackages.cudatoolkit}/lib:${pkgs.cudaPackages.cudatoolkit}/lib64";
     };
   };
 }
