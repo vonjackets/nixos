@@ -67,6 +67,15 @@ in
     loadSessionVariables = true;
   };
 
+  # direnv was installed but never hooked into nushell. nix-direnv caches
+  # `use flake` dev shells so cd'ing into a project doesn't re-evaluate it,
+  # and Zed's load_direnv = "shell_hook" relies on this hook.
+  programs.direnv = {
+    enable = true;
+    nix-direnv.enable = true;
+    enableNushellIntegration = true;
+  };
+
   # commander-key isn't a default identity name, so ssh never offers it on
   # its own. Point ssh at it and cache it in the agent (programs.ssh.startAgent)
   # on first use, so no manual `ssh-add` is needed after a reboot.
