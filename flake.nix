@@ -35,6 +35,10 @@
       {
         home-manager.useUserPackages = true;
         home-manager.useGlobalPkgs = true;
+        # When HM wants to write a file that already exists on disk (e.g. a
+        # stale fontconfig conf from a previous activation), move the old copy
+        # aside with this suffix instead of failing the switch.
+        home-manager.backupFileExtension = "backup";
         home-manager.sharedModules = [ plasma-manager.homeModules.plasma-manager ]; # renamed
       }
     ];
