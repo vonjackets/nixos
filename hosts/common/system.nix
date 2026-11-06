@@ -71,7 +71,29 @@
   nix.settings = {
     trusted-users          = [ "root" "vcaaron" ];
     experimental-features  = [ "nix-command" "flakes" ];
+    # If a build drops free space below 10 GiB, GC dead paths until 50 GiB
+    # is free, instead of failing mid-build on a full disk. Only touches
+    # garbage; never deletes generations.
+    min-free = 10 * 1024 * 1024 * 1024;
+    max-free = 50 * 1024 * 1024 * 1024;
   };
+
+  # Without this, every generation (and everything it references) lives
+  # forever. Weekly: drop generations older than 14 days, then GC.
+  nix.gc = {
+    automatic = true;
+    dates     = "weekly";
+    options   = "--delete-older-than 14d";
+    persistent = true; # catch up if the machine was off at the scheduled time
+  };
+
+  # Hard-link identical store files on a timer rather than via
+  # auto-optimise-store, which slows every build.
+  nix.optimise.automatic = true;
+
+  # Keep the boot menu (and /boot) bounded; older generations stay reachable
+  # via the system profile until GC removes them.
+  boot.loader.systemd-boot.configurationLimit = 10;
 
   system.stateVersion = "25.05";
 
