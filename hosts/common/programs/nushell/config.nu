@@ -5,12 +5,6 @@ use std/util "path add"
 use modules/docker/mod.nu *
 use modules/kubernetes/mod.nu *
 
-#import custom modules
-def --env source-env [file: path = ".env.nuon"] {
-    let vars = open $file
-    load-env $vars
-}
-
 $env.config.show_banner = false
 $env.EDITOR = "vim"
 def create_left_prompt [] {

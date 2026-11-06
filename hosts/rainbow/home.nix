@@ -12,4 +12,21 @@
         "{\"layoutDirection\":\"horizontal\",\"tiles\":[{\"width\":0.25},{\"width\":0.5},{\"width\":0.25}]}";
     };
   };
+
+  # Rainbow-only Zed override: turn on the Agent 2 panel so we can drive
+  # AI-assisted edits from the editor instead of a terminal session.
+  # Merges with common/home.nix userSettings at the top level — `agent` is
+  # a new key there, so no override conflict.
+  #
+  # The Anthropic / OpenAI / etc. sign-in happens in Zed's UI; API keys
+  # live in the OS keyring, never in the Nix store.
+  programs.zed-editor.userSettings = {
+    agent = {
+      version = "2";
+      dock = "right";
+      default_profile = "ask";
+      always_allow_tool_actions = false;
+      notify_when_agent_waiting = "primary_screen";
+    };
+  };
 }
