@@ -50,6 +50,9 @@
     LIBVA_DRIVER_NAME = "nvidia";
     NVD_BACKEND = "direct";
     MOZ_DISABLE_RDD_SANDBOX = "1";
+    # KWin: delay VRR cursor updates to hide the NVIDIA + Plasma 6 right-edge
+    # taskbar flicker on wide VRR panels (Neo G9 57" symptom).
+    KWIN_DRM_DELAY_VRR_CURSOR_UPDATES = "1";
   };
 
   # Enable the NVIDIA VA-API shim so Firefox/Chromium/mpv can HW-decode via

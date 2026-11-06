@@ -305,6 +305,12 @@
 
       kwalletrc.Wallet."First Use" = false;
 
+      # Prefer smoother frames over low input latency on the compositor, and
+      # keep the panel composited even when a fullscreen app is active — both
+      # target Plasma 6 + NVIDIA Wayland taskbar-flicker on wide panels.
+      kwinrc.Compositing.LatencyPolicy = "Medium";
+      kwinrc.Compositing.WindowsBlockCompositing = false;
+
       kwinrc.Desktops.Number = 1;
       kwinrc.Desktops.Rows = 1;
       kwinrc.NightColor.DayTemperature = 5200;
