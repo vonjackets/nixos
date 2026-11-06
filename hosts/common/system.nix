@@ -65,8 +65,6 @@
     };
   };
 
-  security.unprivilegedUsernsClone = true;
-
   programs.ssh.startAgent = true;
   programs.kdeconnect.enable = true;
 
