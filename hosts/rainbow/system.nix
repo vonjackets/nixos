@@ -24,7 +24,6 @@
 
   # Rainbow is a desktop, and sometimes we leave it for extended periods, no real point in letting it sleep since power is consistent
   systemd.sleep.settings.Sleep = {
-
     AllowSuspend = "no";
     AllowHibernation = "no";
     AllowHybridSleep = "no";
@@ -84,6 +83,10 @@
     algorithm = "zstd";
     memoryPercent = 50;
   };
+
+  environment.systemPackages = with pkgs; [
+    claude-code
+  ];
 
   services.ollama = {
     enable = true;

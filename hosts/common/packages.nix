@@ -3,6 +3,7 @@ let
 
 rustToolchain = pkgs.rust-bin.stable.latest.default.override {
   extensions = [ "rust-src" "rust-analyzer" "clippy" "rustfmt" ];
+  targets = [ "wasm32-unknown-unknown" ];
 };
 
 in
@@ -34,7 +35,6 @@ in
     podman-tui
     docker-compose
     zoxide
-    minikube
     k9s
     kubectl
     fluxcd
@@ -82,7 +82,9 @@ in
     util-linux
     sops
     envsubst
+    # -- Rust tooling
     rustToolchain
+    dioxus-cli
     # -- Podman / container runtime deps --
     slirp4netns
     fuse-overlayfs
@@ -95,5 +97,7 @@ in
     hyphenDicts.en_US
 
     signal-desktop
+
+    mpv # video player
   ];
 }

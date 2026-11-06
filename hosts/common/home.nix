@@ -5,7 +5,7 @@ let
     src = builtins.fetchGit {
       url = "https://github.com/nushell/nu_scripts.git";
       name = "nu_scripts";
-      rev = "485a62c9a3522ef13abb1770523a2a566da721bd";
+      rev = "cee236cf46a597b43f36b56ccee5881fc0483c56";
       ref = "HEAD";
     };
     installPhase = ''

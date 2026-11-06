@@ -27,6 +27,7 @@ $env.PROMPT_INDICATOR = ""
 $env.PROMPT_INDICATOR_VI_INSERT = ": "
 $env.PROMPT_INDICATOR_VI_NORMAL = "〉"
 $env.PROMPT_MULTILINE_INDICATOR = "::: "
+$env.KUBECONFIG = "/etc/rancher/k3s/k3s.yaml"
 
 alias ls = eza --icons --group-directories-first
 alias ll = eza -lh --git
