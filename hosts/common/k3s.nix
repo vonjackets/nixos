@@ -4,9 +4,10 @@
 # That's fine on rainbow, where you have CPU/RAM to spare and it's exactly the kind of dev tooling the machine exists for.
 { ... }:
 {
-  networking.firewall.allowedTCPPorts = [
-    6443 # k3s API server
-  ];
+  # The k3s API (6443) is deliberately NOT opened on the firewall: this is a
+  # single-node cluster driven from this machine (kubectl hits 127.0.0.1),
+  # and pods reach the apiserver over the trusted CNI interfaces below.
+  # Open it host-locally only if another machine needs to join or manage it.
 
   # NixOS's firewall drops forwarded traffic on flannel's CNI interfaces by
   # default, which breaks pod-to-pod and pod-to-apiserver networking before
