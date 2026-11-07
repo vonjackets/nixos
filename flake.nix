@@ -18,7 +18,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, nixpkgs-mozilla, claude-code, rust-overlay, plasma-manager , ... }:
+  outputs = { self, nixpkgs, home-manager, nixpkgs-mozilla, claude-code, rust-overlay, plasma-manager, ... }:
   let
     sharedOverlays = [
       rust-overlay.overlays.default
@@ -89,5 +89,41 @@
         }
       ];
     };
+
+    # Agent VM images, built via the upstreamed `incus-virtual-machine`
+    # module in nixpkgs. That module pulls in the qcow2 builder, the
+    # qemu-guest profile (virtio drivers for the Incus host<->guest
+    # channel), and the LXC/Incus metadata tarball generator in one shot.
+    # Each agent's own configuration.nix enables `virtualisation.incus.
+    # agent.enable = true` so `incus exec` works on the resulting instance.
+    #
+    # Build and import:
+    #   DISK=$(nix build --no-link --print-out-paths .#arch-image-disk)
+    #   META=$(nix build --no-link --print-out-paths .#arch-image-metadata)
+    #   incus image import "$META"/tarball/*.tar.xz "$DISK"/*.qcow2 \
+    #     --alias arch-vm
+    packages.x86_64-linux =
+      let
+        mkAgent = module:
+          nixpkgs.lib.nixosSystem {
+            system = "x86_64-linux";
+            modules = [
+              module
+              {
+                nixpkgs.overlays = sharedOverlays;
+                # claude-code and friends are unfree; let the image build.
+                nixpkgs.config.allowUnfree = true;
+              }
+              "${nixpkgs}/nixos/modules/virtualisation/incus-virtual-machine.nix"
+            ];
+          };
+        arch = mkAgent ./hosts/rainbow/agents/arch/configuration.nix;
+        eng-042 = mkAgent ./hosts/rainbow/agents/eng-042/configuration.nix;
+      in {
+        arch-image-disk = arch.config.system.build.qemuImage;
+        arch-image-metadata = arch.config.system.build.metadata;
+        eng-042-image-disk = eng-042.config.system.build.qemuImage;
+        eng-042-image-metadata = eng-042.config.system.build.metadata;
+      };
   };
 }

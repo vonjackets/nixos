@@ -68,16 +68,33 @@ Rainbow already has the base ready in `hosts/common/incus.nix`:
   - `agent` — stacks `limits.cpu = 4`, `limits.memory = 8GiB`, 30 GiB
     root disk cap
   - `sealed` — stacks last to strip `eth0` (sets its type to `none`)
+- `dev` Incus project (shares profiles with the default project so
+  `agent` / `sealed` are usable without redefining)
 - `networking.nftables.enable = true` (Incus assertion)
 - Host firewall on `incusbr0`: only UDP 53/67, TCP 53 (DHCP + DNS)
 - `vcaaron` in the `incus-admin` group (root-equivalent on the host —
   same class as the podman docker socket)
 
+And from `hosts/rainbow/system.nix`:
+
+- `pkgs.t3code` installed on the host (the `t3` CLI + the desktop
+  client, for pairing and triage from the rainbow seat itself)
+
+Agent VM images are also declarative now:
+
+- `hosts/rainbow/agents/arch/configuration.nix` — Architect VM
+  (Claude Code + t3code).
+- `hosts/rainbow/agents/eng-042/configuration.nix` — Engineer VM
+  (Codex + t3code).
+- `packages.x86_64-linux.{arch,eng-042}-image-{disk,metadata}` build
+  the qcow2 + metadata tarball Incus needs for import, using the
+  upstreamed `incus-virtual-machine` module in nixpkgs. The guest
+  `incus-agent` is enabled in each module so `incus exec` works.
+
 What's **not** yet in Nix, but will be in the follow-up PR:
 
-- `pkgs.t3code` on the host (for the CLI + client)
-- Per-instance T3 install path (Nix inside the instance if it's NixOS,
-  `curl` installer otherwise)
+- Agent modules for `eng-042`, `sec-042`, `oc`, `infer` (mirror
+  arch's pattern).
 - Tailscale module (if we go hybrid remote)
 - Egress allowlist beyond DHCP/DNS (per-role; see Containment below)
 - Secrets handling (`sops-nix` or `agenix`) for per-instance GitHub PATs
@@ -174,43 +191,208 @@ as unverified and check at install time.
 
 Already done:
 
-- Incus base (`hosts/common/incus.nix`): bridge, pool, profiles, egress
-  lockdown, `incus-admin` group.
+- Incus base (`hosts/common/incus.nix`): bridge, pool, profiles, `dev`
+  project, egress lockdown, `incus-admin` group.
+- `pkgs.t3code` on the host.
+- `arch` VM image declared in Nix (`hosts/agents/arch/configuration.nix`
+  + `.#arch-image-disk` / `.#arch-image-metadata` flake outputs).
 - Host Ollama + gamemode stop/start hook.
 - Host k3s (still worth re-questioning whether it belongs on the gaming
   host — see `STATUS.md`).
 
-Next PR:
+Next (post-rebuild — see **MVP runbook** below):
 
-1. Add `pkgs.t3code` to the host config so the CLI and desktop client
-   are available on rainbow itself.
-2. `incus project create dev` and switch to it.
-3. Launch `arch` as a NixOS VM in that project
-   (`incus launch images:nixos/unstable arch --vm -p default -p agent`).
-   Install `claude-code` and `t3` inside (via Nix if NixOS, else the
-   installer).
-4. `t3 serve --lan` in `arch`; `t3 pair` and connect from the Mac.
-5. Confirm the Mac can see the environment and run a plan-only task.
+1. Build and import the `arch` image: `nix build .#arch-image-disk
+   .#arch-image-metadata && incus image import ... --alias arch-vm`.
+2. `incus launch arch-vm arch --vm -p default -p agent` in the `dev`
+   project.
+3. Inside `arch` (as the `agent` user): `t3 serve --lan`, `t3 pair`,
+   connect from the Mac client.
+4. Confirm the Mac sees the environment and can run a plan-only task
+   against this repo.
 
 After that:
 
-6. Add `eng-042` with a worktree mount
-   (`incus config device add eng-042 work disk source=... path=/work`)
-   and a Codex login scoped to its own fine-grained GitHub PAT. Run one
-   small task, snapshot before, restore after — confirm the rollback
-   actually works.
-7. Add `sec-042` with `readonly=true` on the disk device. **Verify
-   the mount refuses writes from inside** — don't trust the setting
-   without testing.
+5. Build + launch `eng-042` (scaffolding already in place — see the
+   runbook subsection below). Add a writable worktree mount per task,
+   log Codex in with a per-instance fine-grained GitHub PAT. Snapshot
+   before each task; restore after to confirm the rollback works.
+6. `hosts/rainbow/agents/sec-042/configuration.nix` with the reviewer
+   package set. Launch with `readonly=true` on the disk device.
+   **Verify the mount refuses writes from inside** — don't trust the
+   setting without testing.
 
 Later:
 
-8. Stand up `infer` (GPU container) and `oc` (VM). Revisit the egress
+7. Stand up `infer` (GPU container) and `oc` (VM). Revisit the egress
    ACL to allow only `oc` → `infer`. Extend the gamemode hook to pause
    `infer`.
 
+## MVP runbook: `arch` instance from our own flake image
+
+We build the VM image from `hosts/agents/arch/configuration.nix` via
+`nixos-generators` and import it into Incus. Nothing about the VM
+contents (packages, user, flakes-on state) lives outside git; the
+image is bit-for-bit reproducible and flake.lock-pinned.
+
+### Build the image (host)
+
+```bash
+# Build the qcow2 disk and metadata tarball in one shot.
+nix build --print-out-paths \
+  .#arch-image-disk .#arch-image-metadata
+# Prints two store paths:
+#   /nix/store/.../arch-image-disk    (contains nixos.qcow2)
+#   /nix/store/.../arch-image-metadata (contains metadata.tar.xz)
+```
+
+### Import into Incus
+
+```bash
+# Import both pieces under a stable alias. Re-importing with the same
+# alias replaces the old image. Both the qcow and tarball names carry
+# a version suffix, so we glob rather than hardcode.
+DISK=$(nix build --no-link --print-out-paths .#arch-image-disk)
+META=$(nix build --no-link --print-out-paths .#arch-image-metadata)
+incus image import "$META"/tarball/*.tar.xz "$DISK"/*.qcow2 --alias arch-vm
+```
+
+### Launch
+
+```bash
+# Switch into the dev project (preseeded in hosts/common/incus.nix).
+incus project switch dev
+
+# Launch from our image, stacking the agent resource limits. The agent
+# profile sets security.secureboot=false, so the unsigned NixOS kernel
+# boots cleanly.
+incus launch arch-vm arch --vm -p default -p agent
+
+# Wait until the guest agent is reachable (~45-60s on first boot).
+incus exec arch -- true
+
+# Drop into a login shell as the pre-created `agent` user.
+incus exec arch -- su - agent
+```
+
+The image already has:
+
+- `claude-code` and `t3code` on `$PATH`
+- `vim`, `git`, `jq`
+- Nix flakes enabled system-wide
+- A `wheel` member `agent` user (`sudo` is passwordless; change the
+  initial password immediately)
+- SSH disabled — the only ingress is T3's bearer
+
+### Start T3 and pair
+
+Inside the VM, as `agent`:
+
+```bash
+# Start the server on LAN only — no third-party relay.
+t3 serve --lan
+
+# In a second shell on the VM, print a one-time pairing link.
+incus exec arch -- su - agent -c 't3 pair'
+```
+
+Back on the T3 client (Mac / web / phone):
+
+1. Add an environment using the pairing link.
+2. Sign in to Anthropic inside the environment. This login lives inside
+   the `arch` VM, not on the host.
+3. When ready to point Claude Code at this repo, mount it read-only:
+   ```bash
+   incus config device add arch proj disk \
+     source=/home/vcaaron/projects/nixos path=/srv/dev/proj readonly=true
+   ```
+
+### Rollback
+
+```bash
+incus snapshot create arch baseline
+# ...run a task...
+incus snapshot restore arch baseline
+```
+
+### Re-rolling the image
+
+When the arch `configuration.nix` changes:
+
+```bash
+# Rebuild and re-import under the same alias.
+nix build .#arch-image-disk .#arch-image-metadata
+incus image import <paths> --alias arch-vm
+
+# Existing instances don't update themselves. Either launch fresh ones
+# from the new alias, or:
+incus delete -f arch && incus launch arch-vm arch --vm -p default -p agent
+```
+
+## MVP runbook: `eng-042` instance
+
+Same shape as `arch`, with one extra device: a writable worktree mount.
+The agent profile's 30 GiB disk cap applies, so very large worktrees want
+a dedicated disk pool rather than the built-in rootfs.
+
+```bash
+# 1. Build + import (same flow as arch, different alias).
+DISK=$(nix build --no-link --print-out-paths .#eng-042-image-disk)
+META=$(nix build --no-link --print-out-paths .#eng-042-image-metadata)
+incus image import "$META"/tarball/*.tar.xz "$DISK"/*.qcow2 \
+  --alias eng-042-vm
+
+# 2. Launch (dev project, agent profile).
+incus project switch dev
+incus launch eng-042-vm eng-042 --vm -p default -p agent
+
+# 3. Attach a writable worktree. Create the worktree on the host first;
+#    one-writer-per-branch still applies, so this VM owns the branch
+#    while it's mounted.
+HOST_WT=/home/vcaaron/projects/nixos-worktrees/eng-042-task
+git -C /home/vcaaron/projects/nixos worktree add "$HOST_WT" -b eng-042/task-001
+incus config device add eng-042 work disk source="$HOST_WT" path=/work
+
+# 4. Snapshot a known-good baseline before the first task.
+incus snapshot create eng-042 baseline
+
+# 5. Shell in and start T3 as the agent user; log into Codex inside the VM.
+incus exec eng-042 -- su - agent -c 't3 serve --lan'
+# second shell:
+incus exec eng-042 -- su - agent -c 't3 pair'
+```
+
+Rollback between tasks:
+
+```bash
+incus snapshot restore eng-042 baseline
+```
+
+When a task is done, detach the worktree and either merge it back on the
+host or discard it:
+
+```bash
+incus config device remove eng-042 work
+git -C /home/vcaaron/projects/nixos worktree remove "$HOST_WT"
+```
+
 ## Open questions / TODO for the next PR
 
+- **Auto-start the homelab on rainbow boot.** Right now the full
+  "build image → `incus image import` → `incus launch` → attach mounts
+  → `t3 serve` in a zellij pane → `t3 pair`" flow is entirely
+  imperative, and nothing comes back up after a reboot. The k3s module
+  on rainbow already handles its own auto-boot; want the same for the
+  agent instances. Options to explore:
+  - Declarative Incus instances via an extended preseed (if upstream
+    supports it) or a systemd oneshot on rainbow that runs
+    `incus launch <alias> <name> -p ... --no-wait` with idempotency.
+  - `t3 service install` inside each VM so `t3 serve` comes up as a
+    user systemd service, not something that dies when you close the
+    terminal pane.
+  - Mounts (worktrees, nix-store, blitz repo) baked into an Incus
+    *profile* per role, so `incus launch` with that profile stacks
+    them automatically instead of a `config device add` sequence.
 - NixOS vs Debian/Ubuntu for the Incus VM images? NixOS gives us
   flake-based reproducibility and a single config language; non-NixOS
   is faster to get a shell on. Leaning NixOS for `arch`/`eng-042`/
@@ -222,6 +404,11 @@ Later:
   warning. Probably a dedicated flake input tracking a known-good tag.
 - Per-instance T3 install path — Nix inside NixOS VMs, `curl` installer
   inside Debian. Standardize one or document both.
+- **Writable shared Nix store once lane VMs start building Rust.**
+  Read-only `/nix/store` bind mount works for arch (plan-only), but
+  lane VMs compiling the Blitz workspace will want to add paths. Needs
+  a decision: per-VM overlay store (safer), or writable shared store
+  (simpler, accepts lateral-movement risk inside the `dev` project).
 
 ## References
 

@@ -87,6 +87,10 @@
 
   environment.systemPackages = with pkgs; [
     claude-code
+    # Agent-harness control surface for the homelab plan (see HOMELAB.md).
+    # Installed on the host so the CLI is here for pairing + triage; each
+    # agent instance will install its own t3 inside the VM.
+    t3code
   ];
 
   services.ollama = {

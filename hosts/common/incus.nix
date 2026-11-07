@@ -63,6 +63,10 @@
           config = {
             "limits.cpu" = "4";
             "limits.memory" = "8GiB";
+            # VM instances booting unsigned images (nixos/unstable,
+            # debian/13, ...) can't satisfy secureboot. Containers ignore
+            # this key, so it's safe to leave on the shared profile.
+            "security.secureboot" = "false";
           };
           devices.root = {
             path = "/";
@@ -75,6 +79,19 @@
           # Stack last to strip networking entirely (overrides eth0).
           name = "sealed";
           devices.eth0.type = "none";
+        }
+      ];
+
+      # Scoped project for the homelab plan (see HOMELAB.md). Shares profiles
+      # with the default project so `agent` / `sealed` are usable here without
+      # redefining them; images and storage volumes stay project-local.
+      projects = [
+        {
+          name = "dev";
+          description = "Agent homelab — one Incus instance per role.";
+          config = {
+            "features.profiles" = "false";
+          };
         }
       ];
     };

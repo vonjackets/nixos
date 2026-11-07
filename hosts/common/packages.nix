@@ -101,5 +101,6 @@ in
     mpv # video player
     # audio package needed for claude voice mode
     sox
+
   ];
 }
