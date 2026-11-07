@@ -90,25 +90,25 @@
       ];
     };
 
-    # Agent VM images, built via the upstreamed `incus-virtual-machine`
-    # module in nixpkgs. That module pulls in the qcow2 builder, the
-    # qemu-guest profile (virtio drivers for the Incus host<->guest
-    # channel), and the LXC/Incus metadata tarball generator in one shot.
-    # Each agent's own configuration.nix enables `virtualisation.incus.
-    # agent.enable = true` so `incus exec` works on the resulting instance.
+    # Agent VM images, one per homelab role (see hosts/rainbow/HOMELAB.md),
+    # built via the upstreamed `incus-virtual-machine` module in nixpkgs.
+    # That module pulls in the qcow2 builder, the qemu-guest profile, and
+    # the Incus metadata tarball generator. Each role imports
+    # hosts/common/agent-vm.nix (incus-agent, `agent` user, t3-serve).
     #
-    # Build and import:
-    #   DISK=$(nix build --no-link --print-out-paths .#arch-image-disk)
-    #   META=$(nix build --no-link --print-out-paths .#arch-image-metadata)
+    # Build and import, e.g. for `eng`:
+    #   DISK=$(nix build --no-link --print-out-paths .#eng-image-disk)
+    #   META=$(nix build --no-link --print-out-paths .#eng-image-metadata)
     #   incus image import "$META"/tarball/*.tar.xz "$DISK"/*.qcow2 \
-    #     --alias arch-vm
+    #     --alias eng-vm --project dev
     packages.x86_64-linux =
       let
-        mkAgent = module:
-          nixpkgs.lib.nixosSystem {
+        lib = nixpkgs.lib;
+        mkAgent = role:
+          lib.nixosSystem {
             system = "x86_64-linux";
             modules = [
-              module
+              ./hosts/rainbow/agents/${role}/configuration.nix
               {
                 nixpkgs.overlays = sharedOverlays;
                 # claude-code and friends are unfree; let the image build.
@@ -117,13 +117,13 @@
               "${nixpkgs}/nixos/modules/virtualisation/incus-virtual-machine.nix"
             ];
           };
-        arch = mkAgent ./hosts/rainbow/agents/arch/configuration.nix;
-        eng-042 = mkAgent ./hosts/rainbow/agents/eng-042/configuration.nix;
-      in {
-        arch-image-disk = arch.config.system.build.qemuImage;
-        arch-image-metadata = arch.config.system.build.metadata;
-        eng-042-image-disk = eng-042.config.system.build.qemuImage;
-        eng-042-image-metadata = eng-042.config.system.build.metadata;
-      };
+        roles = [ "eng" "sec" "doc" "jr" ];
+      in
+        lib.foldl' (acc: role:
+          let sys = mkAgent role; in
+          acc // {
+            "${role}-image-disk" = sys.config.system.build.qemuImage;
+            "${role}-image-metadata" = sys.config.system.build.metadata;
+          }) { } roles;
   };
 }
