@@ -74,21 +74,6 @@
         }
       ];
     };
-    nixosConfigurations.latitude = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = sharedModules ++ [
-        ./hosts/latitude/hardware-configuration.nix
-        ./hosts/latitude/system.nix
-        {
-          home-manager.users.vcaaron = {
-            imports = [
-              ./hosts/common/home.nix
-              ./hosts/scorpion/home.nix
-            ];
-          };
-        }
-      ];
-    };
 
     # Agent VM images, one per homelab role (see hosts/rainbow/HOMELAB.md),
     # built via the upstreamed `incus-virtual-machine` module in nixpkgs.
