@@ -179,7 +179,8 @@ Rainbow already has the base ready in `hosts/common/incus.nix`:
 - `dev` Incus project (shares profiles with the default project so
   `agent` / `sealed` are usable without redefining)
 - `networking.nftables.enable = true` (Incus assertion)
-- Host firewall on `incusbr0`: only UDP 53/67, TCP 53 (DHCP + DNS)
+- Host firewall on `incusbr0`: only UDP 53/67, TCP 53 (DHCP + DNS) to
+  the host; DHCP pool `.100`–`.254`, `.2`–`.99` for pinned instances
 - `vcaaron` in the `incus-admin` group (root-equivalent on the host —
   same class as the podman docker socket)
 
@@ -228,16 +229,23 @@ Not yet in Nix:
   `incus snapshot create <instance> before-<task>`. If the run goes
   sideways, restore with `incus snapshot restore`. btrfs CoW makes this
   cheap.
-- **Egress allowlist.** Today `hosts/common/incus.nix` only opens DHCP
-  and DNS on the bridge, and everything else is blocked. When the
-  instances are actually deployed, extend this to a per-role allowlist
-  (Incus network ACLs or nftables rules on the bridge):
-  - `eng`, `sec`, `doc`: `api.anthropic.com`, `api.openai.com`,
-    `api.github.com`, `objects.githubusercontent.com`
-  - `jr`: only `infer`'s bridge address and port
-  - `infer`: no egress (pull models through the host, then copy them in)
-  The exact Incus ACL flags vary by version, so check them against the
-  Incus docs before relying on them.
+- **Egress.** `hosts/common/incus.nix` limits what instances can reach
+  **on the host** (DHCP and DNS only, plus `jr` → the Ollama proxy). It
+  does not limit **forwarded** traffic: through the bridge's NAT, the
+  instances can reach the internet. Per role:
+  - `jr`: **no internet** (done, in `hosts/rainbow/homelab.nix`). An
+    nftables forward chain drops any new connection from `10.80.0.50`.
+  - `eng`, `sec`, `doc`: still open. The target allowlist is
+    `api.anthropic.com`, `api.openai.com`, `api.github.com`,
+    `objects.githubusercontent.com`. Hostname allowlists need either a
+    DNS-aware filter or Incus ACLs. The exact Incus ACL flags vary by
+    version, so check them against the docs.
+  - `infer`: no egress (pull models through the host, then copy them in).
+- **Pinned addresses.** Rules that key on a source IP (`jr`'s) need that
+  IP pinned (`ipv4.address` on the instance's `eth0`) and outside the
+  DHCP pool (`.100`–`.254`). They also assume no other instance claims
+  it. Turning on `security.ipv4_filtering` on every instance's NIC would
+  enforce that; it's a TODO.
 - **Permission modes.** Keep Full access off. Engineer and writer threads
   run Supervised or Auto-accept edits. Review threads run Supervised. `jr`
   runs Supervised until it has earned more.
@@ -279,19 +287,36 @@ bridge, with the egress ACL blocking everything else.
 
 **Model**: `gemma4:12b` (11.9B, Q4_K_M, 8.0 GB on disk; capabilities
 include tools and thinking). It's already pulled into the host's Ollama.
-That leaves about 4 GB of the 4070 for KV cache and runtime, so **don't
-run it at its 256k maximum context**. Cap `num_ctx` (start around 32k)
-and raise it while watching `nvidia-smi`. If it falls short on real
-tasks, gpt-oss-20b is the fallback that still fits.
+Ollama's default context is 4096 tokens, too small for an agent, so the
+host sets `OLLAMA_CONTEXT_LENGTH=32768`. Measured with the model fully on
+the GPU: about 11.4 GB of the 12.3 GB VRAM, with the 7680×2160 desktop
+running. A game alongside won't fit, which is what the gamemode hook is
+for. If gemma falls short on real tasks, gpt-oss-20b is the fallback.
 
-**Status**: Ollama still runs on the **host** today (`services.ollama`
-with `ollama-cuda`, `CUDA_VISIBLE_DEVICES=0`), not inside `infer`. The
-host's `gamemode` custom hook already stops `ollama.service` on game
-start and restarts it on game end (`hosts/common/gaming.nix`), so the
-GPU-contention problem is managed for now. Until `infer` exists, `jr`
-could point at the host's Ollama on `10.80.0.1` as a stopgap. That needs
-a host firewall rule on `incusbr0`, which is an attack-surface decision
-to call out in its own commit. Moving Ollama into `infer` will need:
+**Status: `jr` uses the host's Ollama for now** (`hosts/rainbow/homelab.nix`):
+
+- Ollama stays on `127.0.0.1:11434`. Nothing else on the host changes.
+  Blitz's local cluster runs its own Ollama and doesn't use this one.
+- `ollama-bridge.socket` listens only on `10.80.0.1:11434` (the bridge
+  address) and forwards to Ollama through `systemd-socket-proxyd`.
+- The host firewall admits only `jr`'s pinned address (`10.80.0.50`) to
+  that port. `eng`, `sec` and `doc` can't reach it.
+- While a game is running (gamemode stops `ollama.service`), `jr`'s
+  requests fail until it's back.
+
+OpenCode's config is baked into the `jr` image at
+`/etc/opencode/opencode.json` (`OPENCODE_CONFIG`, set for `t3-serve` and
+for login shells). It sets the provider, the model, `autoupdate: false`
+and `share: "disabled"`. The OpenAI-compatible adapter ships inside the
+package; I checked that it fetches nothing from npm at runtime, which is
+why `jr` can run with no internet at all.
+
+nixpkgs' `opencode` 2.2.5 doesn't build at our pin, because the expected
+hash of its `node_modules` download no longer matches. The `jr` image
+carries a one-line overlay that corrects the hash, scoped to that image.
+Drop it once nixpkgs is fixed.
+
+Moving Ollama into `infer` will need:
 
 - GPU passthrough into the container (not a VM — single-GPU + games
   makes VM passthrough painful).
@@ -311,7 +336,7 @@ time.
 Already done:
 
 - Incus base (`hosts/common/incus.nix`): bridge, pool, profiles, `dev`
-  project, egress lockdown, `incus-admin` group.
+  project, host-input lockdown on the bridge, `incus-admin` group.
 - `pkgs.t3code` on the host.
 - Shared agent module and the `eng` / `sec` / `doc` / `jr` image outputs.
 - Host Ollama + gamemode stop/start hook.
@@ -336,13 +361,20 @@ Next:
    Verified the same checks as `eng-app`, plus reading another branch
    (`blitz-app`) through `/lead`. Left for me: pair, log in, snapshot
    `baseline`; update Blitz's lane D brief for the broader role.
-4. **`doc`** for lane E.
+4. **`jr`**: *running (2026-11-07).* `~/projects/blitz-jr` on `lane/jr`
+   at `/work`, `/lead` read-only, pinned at `10.80.0.50`. Verified after
+   the host switch: `gemma4:12b` answers through the proxy (32k context,
+   fully on the GPU, ~17s cold); OpenCode tool calls work (a read-only
+   Glob task came back right, with no writes); `jr` can't reach the
+   internet by name or IP but DNS still resolves through the host;
+   `eng-app` and `sec` can't reach the proxy and still have internet.
+   Left for me: pair, snapshot `baseline`.
+5. **`doc`** for lane E.
 
 Later:
 
-5. `infer` (GPU container) and `jr`. Pick the model, point OpenCode at
-   `infer`, restrict `jr`'s egress to `infer` only, and extend the
-   gamemode hook to pause `infer`.
+6. `infer` (GPU container): move Ollama off the host, repoint `jr`'s
+   baseURL, and extend the gamemode hook to pause `infer`.
 
 ## Runbook: launching a role instance
 
@@ -385,14 +417,15 @@ git -C blitz-app remote set-url origin /lead
 ```bash
 incus project switch dev
 
+# Create without starting, so every device is in place before first boot.
+# (Disk devices can't be hot-added to a running VM: QEMU has no free PCI
+# slot for virtiofs. On an existing instance, stop -> add -> start, and
+# don't stop it mid-first-boot; that hung once and needed -f.)
 # The agent profile sets security.secureboot=false, so the unsigned
 # NixOS kernel boots cleanly.
-incus launch eng-vm eng-app --vm -p default -p agent
-
-# Disk devices can't be hot-added to a running VM (QEMU has no free PCI
-# slot for virtiofs), so stop -> add -> start. Wait ~30s after a first
-# boot before stopping; a stop issued mid-first-boot hung and needed -f.
-incus stop eng-app
+incus init eng-vm eng-app --vm -p default -p agent
+# jr only: pin its address (host rules key on it).
+# incus config device override jr eth0 ipv4.address=10.80.0.50
 # One writer per branch: while it's mounted, this instance owns lane/app.
 incus config device add eng-app work disk \
   source=/home/vcaaron/projects/blitz-app path=/work
@@ -501,6 +534,11 @@ rm -rf ~/projects/blitz-app
   the Blitz workspace need to add paths. Options: a per-VM overlay store
   (safer), or a writable shared store (simpler, but accepts
   lateral-movement risk inside the `dev` project).
+- **`jr`'s DNS.** Its egress block covers forwarded traffic, but the
+  host's dnsmasq still resolves names for it, which is a slow
+  exfiltration channel. Options: an nftables input rule refusing DNS from
+  `10.80.0.50` (it only needs the proxy, by IP), or per-instance dnsmasq
+  config. Low priority while `jr` only gets low-risk tasks.
 - **Model for `jr`**: `gemma4:12b` to start (gpt-oss-20b as fallback). Record
   what was tried and how it did on real forwarded tasks.
 

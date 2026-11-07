@@ -44,6 +44,17 @@ in
       default = 3773;
       description = "Port `t3 serve` listens on; opened in the guest firewall.";
     };
+
+    environment = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = { };
+      example = { OPENCODE_CONFIG = "/etc/opencode/opencode.json"; };
+      description = ''
+        Variables for the harnesses: set on t3-serve (whose children are the
+        agent sessions) and in login shells, so `incus exec … su - agent`
+        sees the same configuration T3 does. Public — no secrets.
+      '';
+    };
   };
 
   config = {
@@ -95,6 +106,8 @@ in
 
     services.openssh.enable = false;
 
+    environment.sessionVariables = cfg.environment;
+
     # Declarative replacement for `t3 serve --lan` in a zellij pane (and for
     # `t3 service install`, which would write a unit outside Nix). State
     # lives in the agent user's default T3 home, so `t3 pair` run as
@@ -108,6 +121,7 @@ in
       wants = [ "network-online.target" ];
       # Harnesses spawned by T3 need git, nix, sudo and themselves on PATH.
       path = [ "/run/wrappers" "/run/current-system/sw" ];
+      inherit (cfg) environment;
       serviceConfig = {
         User = "agent";
         Group = "users";
