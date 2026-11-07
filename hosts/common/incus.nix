@@ -24,6 +24,9 @@
             "ipv4.address" = "10.80.0.1/24";
             "ipv4.nat" = "true";
             "ipv6.address" = "none";
+            # Dynamic leases from .100 up; .2-.99 are for instances pinned
+            # with `ipv4.address` (see hosts/rainbow/homelab.nix).
+            "ipv4.dhcp.ranges" = "10.80.0.100-10.80.0.254";
           };
         }
       ];

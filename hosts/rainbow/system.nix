@@ -35,6 +35,7 @@
     ../common/gaming.nix
     ../common/k3s.nix
     ../common/incus.nix
+    ./homelab.nix
   ];
 
   # NVIDIA + Proton tuning. NVAPI unlocks DLSS Frame Generation under Proton,
@@ -101,6 +102,10 @@
     # shadows the bundled libs and drags ~3.2 GiB of CUDA into the closure.
     environmentVariables = {
       CUDA_VISIBLE_DEVICES = "0";
+      # Ollama's default is 4096, too small for an agent harness (OpenCode's
+      # system prompt + tools alone use much of it). 32k measured at ~11.4 GB
+      # total VRAM with gemma4:12b fully on GPU and the desktop running.
+      OLLAMA_CONTEXT_LENGTH = "32768";
     };
   };
 }
