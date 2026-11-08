@@ -9,7 +9,7 @@
 # lead. Snapshot before each task so a bad run is a `snapshot restore`.
 { pkgs, ... }:
 {
-  imports = [ ../../../common/agent-vm.nix ];
+  imports = [ ../../../common/agent-vm.nix ../common/blitz-lane.nix ];
 
   homelab.agentVm = {
     role = "eng";

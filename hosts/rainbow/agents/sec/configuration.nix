@@ -19,7 +19,7 @@
 # approves each one and relays it.
 { pkgs, ... }:
 {
-  imports = [ ../../../common/agent-vm.nix ];
+  imports = [ ../../../common/agent-vm.nix ../common/blitz-lane.nix ];
 
   homelab.agentVm = {
     role = "sec";

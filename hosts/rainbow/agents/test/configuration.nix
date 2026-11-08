@@ -16,7 +16,7 @@
 # (fixtures, scaffolding) down to jr.
 { pkgs, ... }:
 {
-  imports = [ ../../../common/agent-vm.nix ];
+  imports = [ ../../../common/agent-vm.nix ../common/blitz-lane.nix ];
 
   homelab.agentVm = {
     role = "test";
