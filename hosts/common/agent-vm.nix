@@ -92,6 +92,17 @@ in
       '';
     };
 
+    codexWritableRoots = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      example = [ "/home/agent/blitz-target-app" ];
+      description = ''
+        Extra paths Codex's `workspace-write` sandbox may write, on top of
+        the shared defaults (the lane's `.git`, ~/.cargo, ~/.cache). Lane
+        build dirs outside ${cfg.workDir} go here.
+      '';
+    };
+
     persistentHome = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -121,7 +132,64 @@ in
     nix.settings = {
       experimental-features = [ "nix-command" "flakes" ];
       trusted-users = [ "root" "agent" ];
+      # Housekeeping (HOMELAB.md "Housekeeping"): the root disk is 30 GiB
+      # and the whole Incus pool is a 100 GiB loop file shared by every VM.
+      # Collect garbage during builds whenever free space drops below 3 GiB,
+      # until 10 GiB is free. eng-app hit 94% on 2026-11-08 without this.
+      min-free = 3 * 1024 * 1024 * 1024;
+      max-free = 10 * 1024 * 1024 * 1024;
+      # The agent profile caps a VM at 4 vCPUs and 8 GiB. Unlimited parallel
+      # builds got nix-daemon OOM-killed on test (2026-11-08, building
+      # ACE's dev shell with a nightly Rust toolchain). Two jobs of two
+      # cores each fit the CPU cap and leave memory for the harnesses.
+      max-jobs = 2;
+      cores = 2;
     };
+    # And a weekly sweep of dead paths, so idle VMs give space back too.
+    nix.gc = {
+      automatic = true;
+      dates = "weekly";
+    };
+    # Freed blocks only return to the host pool once the guest discards
+    # them; without this, deleting inside a VM never shrinks the pool.
+    services.fstrim = {
+      enable = true;
+      interval = "daily";
+    };
+
+    # Give RAM back to the host. Guest RAM is memfd-backed (virtiofs needs
+    # shared memory), so the host can't reclaim a guest's page cache, and
+    # KSM can't merge it. Each VM sat at ~6 GiB host RSS with ~1.7 GiB
+    # actually in use (2026-11-08). With the balloon's free-page reporting
+    # on (Incus `balloon` profile), pages the guest frees go back to the
+    # host within seconds: dropping a filled cache took one VM from
+    # 5.4 GiB to 2.0 GiB. The cache only duplicates the host's own cache
+    # of the same disk files, so drop clean page cache every 10 minutes.
+    systemd.services.guest-cache-drop = {
+      description = "Drop clean page cache so free-page reporting returns it to the host";
+      serviceConfig.Type = "oneshot";
+      script = "echo 1 > /proc/sys/vm/drop_caches";
+      startAt = "*:0/10";
+    };
+
+    # Codex's workspace-write sandbox makes `.git` read-only inside writable
+    # roots, so agents can't commit, and it blocks cargo's caches outside
+    # the lane and the network cargo needs. The VM is the containment
+    # boundary; this keeps the sandbox protecting what matters inside it
+    # (~/.codex, ~/.claude, shell rc files, T3 state) instead of running
+    # at full access. Codex reads /etc/codex/config.toml as its system
+    # layer; ~/.codex/config.toml still wins key by key.
+    environment.etc."codex/config.toml".source =
+      (pkgs.formats.toml { }).generate "codex-config.toml" {
+        sandbox_workspace_write = {
+          writable_roots = [
+            "${cfg.workDir}/.git"
+            "/home/agent/.cargo"
+            "/home/agent/.cache"
+          ] ++ cfg.codexWritableRoots;
+          network_access = true;
+        };
+      };
 
     # Non-root user. T3's browser sandbox doesn't work as root, and running
     # the harnesses under their own account keeps the blast radius small.

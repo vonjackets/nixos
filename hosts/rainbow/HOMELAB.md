@@ -176,8 +176,7 @@ merge, and can't apply to a cluster. Those are mine.
         └────▶  jr  ◀────┘    OpenCode + gemma4:12b; low-risk pieces
 ```
 
-`test` is planned (2026-11-08) and not launched yet; the Nix side
-(image, peers, link table) is in place.
+`test` was launched 2026-11-08; see "Suggested order" for its status.
 
 **Mechanism.** Each arrow is a `t3 environment link`, created in the
 upper VM. Agents in that VM's T3 sessions get T3's tools for the linked
@@ -354,6 +353,50 @@ Not yet in Nix:
   loop. `t3 serve --lan` (or `--tailscale-serve` once Tailscale is in)
   is enough.
 
+## Housekeeping (standing order)
+
+**Disk is the scarcest thing in this homelab.** The Incus pool is a
+100 GiB loop file shared by every VM, on a host disk that's 89% full. A
+full pool takes every VM down at once. On 2026-11-08 it was at 92 GiB:
+8 superseded images plus eng-app's 26 GiB Nix store. Deleting those
+and trimming brought it to 35 GiB.
+
+**The order, for every agent (in a VM or on the host) and for me:**
+remove an image, container, volume or build output **as soon as it's
+stopped or superseded**. Don't keep anything "just in case". The source
+is in git and Nix can rebuild it.
+
+What runs on its own (in the images, `hosts/common/agent-vm.nix`):
+
+- **Nix:** garbage collection during a build whenever free space drops
+  below 3 GiB (until 10 GiB is free), plus a weekly `nix-gc`.
+- **`fstrim` daily.** Space freed inside a VM only returns to the pool
+  once the guest discards it. `incus exec <vm> -- fstrim -v /` does it
+  now.
+- **Podman (`test`):** `agent-podman-prune` hourly removes stopped
+  containers, unused volumes and dangling images, and daily (03:00)
+  every image no container uses. Container storage is on the root disk,
+  so a re-roll wipes it too.
+
+What stays manual:
+
+- **After every image import, delete the image it superseded.** The
+  import runbook below does this. Re-importing under an alias leaves the
+  old image untagged and still taking space.
+- **Snapshots:** delete a `before-<task>` snapshot once the task is
+  merged or dropped. Keep one `baseline` per instance.
+- **Detached lanes:** remove the lane clone and the instance once the
+  lane is merged (see "Detach").
+- **Agents in the VMs:** remove containers they start (testcontainers
+  does this on drop) and don't leave `podman build` images or extra
+  cargo target dirs behind. This is in the Blitz process docs (`sec`
+  owns them).
+- **Check** with `incus storage info default | grep "space used"` and
+  `incus info <vm>` (root and home usage).
+
+Still open: share one Nix store or binary cache across the VMs, so each
+one stops downloading and building the same closures.
+
 ## Networking and client access
 
 T3 Code's reachability modes are:
@@ -471,16 +514,17 @@ Next:
    project everywhere, and a `sec` → `jr` link test passed. Needs my host
    switch for the link-direction table. Old instance snapshots
    (`baseline`) were lost with the rebuild; retake them.
-6. **`test`** for the test lane. Replaces `doc` (dropped 2026-11-08:
-   each role updates its own docs, manuals included). Nix side done:
-   image, `10.80.0.60`, sec's peer at `47303`, link table allows
-   `sec` → `test` and `test` → `jr`. Left for me, after the host switch
-   and once `sec` has landed the Blitz lane change: build and import
-   `test-vm`, make `~/projects/blitz-test` on `lane/test`, launch it with
-   the runbook below (`home-test` volume, pinned address,
-   `ipv4_filtering`), re-roll `sec` so it gets the `47303` forwarder,
-   pair, log in, then `link sec test 47303 auto` and
-   `link test jr 47302 auto-accept-edits`.
+6. **`test`**: *running (2026-11-08).* Replaces `doc` (dropped: each
+   role updates its own docs, manuals included). `~/projects/blitz-test`
+   on `lane/test` at `/work`, `/lead` read-only, pinned at `10.80.0.60`
+   with `ipv4_filtering`, `home-test` block volume, `/work` registered
+   as a T3 project. `sec` re-rolled for its `47303` forwarder (home
+   volume snapshot `before-reroll-2026-11-08` taken first). Links
+   `sec` → `test` (auto) and `test` → `jr` (auto-accept-edits) created.
+   Verified: `/lead` refuses writes, `git fetch origin` works, and on
+   T3's port `test` reaches only `jr`, while only `sec` reaches `test`.
+   Left for me: pair, log Claude Code in, snapshot `baseline`, and the
+   kickoff once the test lane's brief exists in Blitz.
 7. **Where `test` runs things against a live stack.** Two separate
    questions, both new attack surface in `homelab.nix`, decided when
    needed:
@@ -508,10 +552,13 @@ Same steps for every role. The example is `eng-app` for Blitz lane B.
 ROLE=eng
 DISK=$(nix build --no-link --print-out-paths .#$ROLE-image-disk)
 META=$(nix build --no-link --print-out-paths .#$ROLE-image-metadata)
-# Re-importing under the same alias replaces the old image. Both file
-# names carry a version suffix, so glob rather than hardcode.
+# Re-importing under the same alias moves the alias but keeps the old
+# image, untagged, taking pool space. Delete it straight away
+# ("Housekeeping"). Both file names carry a version suffix, so glob.
+OLD=$(incus image list --project dev -f csv -c lf | awk -F, -v a=$ROLE-vm '$1==a{print $2}')
 incus image import "$META"/tarball/*.tar.xz "$DISK"/*.qcow2 \
   --alias $ROLE-vm --project dev
+[ -n "$OLD" ] && incus image delete --project dev "$OLD"
 ```
 
 ### Make the lane clone (host)
@@ -549,7 +596,9 @@ incus storage volume create default home-eng-app --type=block size=10GiB
 # slot. On an existing instance, stop -> add -> start, and don't stop it
 # mid-first-boot; that hung once and needed -f.) The agent profile sets
 # security.secureboot=false, so the unsigned NixOS kernel boots cleanly.
-incus init eng-vm eng-app --vm -p default -p agent
+# `balloon`: free-page reporting, so memory the guest frees goes back to
+# the host (see "Housekeeping").
+incus init eng-vm eng-app --vm -p default -p agent -p balloon
 # Every instance: a pinned address (host rules key on it) and anti-spoofing
 # so no other instance can claim it. New instances use .2-.99.
 incus config device override eng-app eth0 \
@@ -581,12 +630,21 @@ incus config device add eng-app polar disk \
 incus start eng-app
 
 # Register the lane as a T3 project so threads (including ones other
-# agents start over a link) have somewhere to run.
+# agents start over a link) have somewhere to run. `t3 project add`
+# refuses while a server owns the T3 home (ServerAlreadyRunningError),
+# and t3-serve starts at boot, so stop it around the add.
+incus exec eng-app -- systemctl stop t3-serve
 incus exec eng-app -- su - agent -c 't3 project add /work --title blitz'
-# Docs say ~/projects/ACE and ~/projects/Polar; the symlinks live on the
-# home volume, so this is once per instance.
+incus exec eng-app -- systemctl start t3-serve
+# Docs say ~/projects/ACE and ~/projects/Polar; these live on the home
+# volume, so this is once per instance. ACE must be a real clone, not a
+# symlink to /ACE: Nix's libgit2 fails on the read-only virtiofs mount
+# ("object not found", 2026-11-08), which breaks `nix develop` there and
+# so Blitz's builder-cargo.sh. Update it with
+# `git -C ~/projects/ACE pull --ff-only` (origin is /ACE). Polar stays a
+# symlink until something needs its flake.
 incus exec eng-app -- su - agent -c \
-  'mkdir -p ~/projects && ln -sfn /ACE ~/projects/ACE && ln -sfn /Polar ~/projects/Polar'
+  'mkdir -p ~/projects && git clone -q /ACE ~/projects/ACE && ln -sfn /Polar ~/projects/Polar'
 ```
 
 A new instance or a new pinned address also needs the host side
@@ -684,8 +742,12 @@ incus exec sec -- su - agent -c 't3 environment list'
 
 Loopback ports are per target: `eng-app` 47301, `jr` 47302, `test`
 47303. On 2026-11-08 every link had disappeared at once (cause unknown);
-I relinked `sec` → `eng-app` and `sec` → `jr` only. `eng-app` → `jr` is
-still unlinked.
+I relinked `sec` → `eng-app` and `sec` → `jr` only. Later that day,
+right after `sec` was re-rolled, its `jr` link was gone again while its
+`eng` link survived (not checked just before the re-roll, so it may
+have gone earlier); it was relinked along with `sec` → `test` and
+`test` → `jr`. `eng-app` → `jr` is still unlinked. Check
+`t3 environment list` in each source after any re-roll.
 
 Links expire after 30 days. Re-running `link` renews one. Revoke one in
 the target's T3 under Settings → Connections, or `t3 environment unlink`
@@ -702,6 +764,18 @@ rm -rf ~/projects/blitz-app
 
 ## Open questions / TODO
 
+- **Pause the agent VMs while a game runs.** gamemode's start/end hooks
+  (`hosts/common/gaming.nix`) already stop and start `ollama.service`.
+  The same hooks could `incus pause` / `incus start` the running agent
+  instances, freeing their CPU (and, with the balloon, much of their
+  RAM) for the game. Needs a polkit-free way for the gaming user to run
+  it (`vcaaron` is in `incus-admin`, so plain `incus` works) and a list
+  of which instances were running, so `end` resumes only those.
+  Deferred 2026-11-08: Ollama agents aren't in use right now.
+- **`jr` is benched** (2026-11-08): stopped, `boot.autostart=false`, its
+  image no longer rebuilt. Its links from `sec` and `test` stay but
+  report unreachable. Bring it back with `incus start jr` and
+  `boot.autostart` unset.
 - **Auto-start the homelab on rainbow boot.** `t3-serve` inside each VM
   is now declarative. Still imperative: image import, `incus launch`,
   and `config device add` for mounts. Nothing restarts the instances

@@ -20,6 +20,7 @@ in
     nufmt
     nu-lint
     vim
+    zellij
     zed-editor
     starship
     atuin

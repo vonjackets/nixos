@@ -1,6 +1,8 @@
 # rainbow — status & roadmap
 
-Rainbow is the primary Linux dev + gaming workstation.
+Rainbow is the primary Linux dev + gaming workstation, and since
+2026-11 also hosts the agent homelab (`HOMELAB.md`). Last reviewed
+2026-11-08.
 
 ## Hardware
 
@@ -9,115 +11,100 @@ Rainbow is the primary Linux dev + gaming workstation.
 - **GPU:** NVIDIA GeForce RTX 4070 (Ada Lovelace, 12 GB VRAM)
 - **RAM:** 32 GiB (30.5 GiB usable — ~1.5 GiB reserved, likely iGPU framebuffer)
 - **iGPU:** AMD Raphael (Ryzen 7000-series integrated — currently unused)
+- **Disk:** single NVMe, 882 GiB ext4 root + 33.6 GiB swap partition
 - **Display:** 57" Samsung (assumed Odyssey Neo G9 57" — 7680×2160 @ 240 Hz,
   VRR/FreeSync Premium Pro, HDR; needs DP 2.1 for full rate)
 
-## Current configuration (snapshot)
+## Current configuration
 
-- **OS:** NixOS 26.11, kernel 6.18.44, KDE Plasma 6.7.4 on Wayland, SDDM
-- **GPU driver:** `nvidia-open` kernel modules, stable driver,
-  `modesetting.enable = true`, `powerManagement.enable = true` (Wayland
-  stability workaround)
+- **OS:** NixOS 26.11, `linuxPackages_zen` (7.2.x), KDE Plasma 6.8 on
+  Wayland, SDDM
+- **GPU driver:** `nvidia-open`, stable branch, modesetting on,
+  `powerManagement.enable = true` (Wayland stability workaround)
 - **Audio:** PipeWire with 32-bit ALSA support for Steam
 - **Gaming stack:** Steam + gamescope session, gamemode, MangoHud,
   protonup-qt, Lutris, xpadneo (Xbox controller)
-- **Extras:** Bluetooth on, Ollama (CUDA) as systemd service, k3s module,
-  Podman with Docker-compat socket
-- **Power:** suspend/hibernate disabled (always-on desktop)
+- **Services:** Ollama (CUDA, `gemma4:12b`, 32k context), k3s, Incus
+  (agent VMs), Podman with Docker-compat socket
+- **Power:** suspend/hibernate disabled (always-on desktop); CPU on
+  `amd_pstate` active, EPP `balance_performance`
 
-## Gaming optimization — areas to improve
+## Applied tuning
 
-Ordered by impact-per-effort **for this specific rig**. The 7680×2160 panel is
-the dominant constraint: the 4070's 12 GB VRAM is tight at native res in
-modern AAA, so upscaling and VRAM discipline matter more than raw latency
-tuning. For competitive titles (which are usually CPU-bound at lower
-resolutions anyway), latency knobs still pay off.
+Gaming (`system.nix`, `common/gaming.nix`):
 
-Nothing here is applied yet — these are candidates.
+- **Kernel:** zen (BORE scheduler) for mixed gaming + desktop load.
+- **gamemode:** renice, screensaver inhibit, NVIDIA PowerMizer max
+  performance while a game runs; start/end hooks stop and restart Ollama
+  to free VRAM.
+- **NVIDIA/Proton env:** 10 GB GL shader disk cache, `PROTON_ENABLE_NVAPI=1`
+  (DLSS Frame Generation), `nvidia-vaapi-driver` for NVDEC video decode,
+  KWin VRR cursor delay for the Neo G9 taskbar flicker.
+- **sysctl:** `swappiness=10`, `vfs_cache_pressure=50`, smaller dirty
+  ratios (10/5), larger network buffers.
+- **Swap:** zstd zram at 50% of RAM, ahead of the disk swap partition.
+- **Audio:** PipeWire quantum 512 (min 32, max 2048), ~10 ms round trip.
 
-### 1. Kernel selection
-- **Current:** 6.18.44 (likely `linuxPackages_latest` given the version).
-- **Opportunity:** `linuxPackages_zen` for BORE scheduler — Zen 4 benefits
-  noticeably from BORE's interactive-task boosting in mixed gaming+desktop
-  workloads. CachyOS kernel is the aggressive option (sched_ext, more tuning)
-  but needs the CachyOS flake input.
-- **Risk:** `nvidia-open` module must build against chosen kernel — Zen
-  usually tracks mainline fast enough that this is fine, but verify with
-  `nixos-rebuild build` before switching.
+Host housekeeping (`common/system.nix`):
 
-### 2. CPU governor & gamemode tuning
-- **Current:** `programs.gamemode.enable = true` with no custom config.
-- **Opportunity:** explicit `programs.gamemode.settings` block: set governor
-  to `performance` during games, renice to `-10`, enable `ioprio`, and
-  (NVIDIA) set `nv_powermizer_mode = 1` for max perf while the game is live.
+- Nix GC weekly (`--delete-older-than 14d`), `min-free` 10 GiB /
+  `max-free` 50 GiB, store optimise on a timer, weekly fstrim.
 
-### 3. NVIDIA perf & VRAM knobs
-- **Current:** `powerManagement.enable = true` (for Wayland stability),
-  nothing else.
-- **Opportunity:**
-  - `__GL_MaxFramesAllowed=1` for lower input lag in competitive titles.
-  - Larger shader cache (very helpful on a 4070 at this res):
-    `__GL_SHADER_DISK_CACHE=1`, `__GL_SHADER_DISK_CACHE_SIZE=10737418240` (10 GB).
-  - DLSS Frame Generation via Proton — set `PROTON_ENABLE_NVAPI=1` and
-    `PROTON_HIDE_NVIDIA_GPU=0` globally (Steam → Launch Options or
-    `environment.sessionVariables`). This is the single biggest win on a
-    7680×2160 panel with a 4070 — turns VRAM-limited stutter into playable
-    frame times in DLSS3-capable games.
-  - `nvidia-vaapi-driver` for hardware video decode (Discord/Firefox) so the
-    GPU isn't CPU-decoding streams while you game.
-- **Risk:** NVAPI enablement occasionally breaks anti-cheat — flip it per
-  game if you play kernel-AC titles.
+Homelab load on the host (2026-11-08, `HOMELAB.md` "Housekeeping"):
 
-### 4. Gamescope per-game launch options
-- **Current:** `gamescopeSession.enable = true`, no documented defaults.
-- **Opportunity:** with a 7680×2160/240 Hz VRR+HDR panel, gamescope earns its
-  keep. Suggested baseline for AAA titles:
-  ```
-  gamescope -W 7680 -H 2160 -r 240 --adaptive-sync \
-    --hdr-enabled --mangoapp --expose-wayland -- %command%
-  ```
-  For VRAM-tight games, render at half-width and upscale:
-  `-w 3840 -h 2160 -W 7680 -H 2160 -F fsr` (or `-F nis`).
-  Competitive titles → render at 3840×1620 or similar for CPU headroom and
-  let gamescope upscale.
+- **Memory was the bottleneck.** The desktop stuttered with 2.5 GiB
+  available, zram full, ~10 GiB on disk swap, and ~14% of time fully
+  stalled on memory (PSI). Agent VMs held ~6 GiB host RAM each while
+  using ~1.7 GiB: guest page cache in memfd-backed RAM (virtiofs needs
+  shared memory), which the host can't reclaim and KSM can't merge.
+  - **Fix:** the `balloon` Incus profile turns on free-page reporting,
+    and each guest drops clean page cache every 10 minutes
+    (`agent-vm.nix`). Measured on `test`: 5.4 GiB → 2.0 GiB host RSS.
+- **CPU:** agent VMs run at `limits.cpu.priority = 4` (default 10), so
+  the desktop, games and k3s win under contention. Their 4-vCPU caps
+  together cover all 12 threads.
+- **Disk:** the Incus pool (100 GiB loop file) went 92 → 43 GiB by
+  pruning superseded images and VM Nix stores. The host root went
+  88% → 79% by removing stale Rust `target/` dirs (Polar 49 GiB, argus
+  15 GiB), anonymous podman volumes and an unused `~/.ollama` model
+  store. Steam (309 GiB) is the biggest remaining consumer.
+- `jr` is benched: stopped and not autostarted.
 
-### 5. I/O and memory tuning
-- **Current:** default sysctl, 32 GiB RAM, swap partition on disk.
-- **Opportunity:** `vm.swappiness = 10`, `vm.vfs_cache_pressure = 50`,
-  net buffer bumps for online play. 32 GiB is comfortable for games but tight
-  if Ollama + k3s + a chunky game are all resident — consider `zram-generator`
-  (compressed swap in RAM) to beat the on-disk swap partition under
-  shader-compile spikes.
+## Open candidates
 
-### 6. Shader & asset storage layout
-- **Current:** single ext4 root on NVMe, swap partition on same disk.
-- **Opportunity:** confirm Steam library is on NVMe (it should be given
-  single-disk layout). Add `noatime,commit=120` to root mount options for
-  less write amplification. At 7680×2160 Steam's shader pre-caching can hit
-  tens of GB — keep an eye on `/var/lib/nvidia-settings` and
-  `~/.cache/nvidia`.
+Ordered by impact-per-effort for this rig. The 7680×2160 panel dominates:
+the 4070's 12 GB VRAM is tight at native res in modern AAA, so upscaling
+and VRAM discipline matter more than raw latency tuning.
 
-### 7. Audio latency
-- **Current:** default PipeWire quantum.
-- **Opportunity:** lower quantum (e.g. `default.clock.quantum = 512`,
-  `default.clock.min-quantum = 32`) for lower audio latency in competitive
-  titles. Headset-dependent.
+1. **Pause agent VMs during games:** extend the gamemode hooks to
+   `incus pause` the running agents and resume them after (TODO in
+   `HOMELAB.md`; deferred while Ollama agents are unused).
+2. **Gamescope per-game launch options:** a documented baseline for
+   AAA titles:
+   ```
+   gamescope -W 7680 -H 2160 -r 240 --adaptive-sync \
+     --hdr-enabled --mangoapp --expose-wayland -- %command%
+   ```
+   For VRAM-tight games, render at half-width and upscale:
+   `-w 3840 -h 2160 -W 7680 -H 2160 -F fsr`.
+3. **`__GL_MaxFramesAllowed=1`** for lower input lag in competitive
+   titles (per game, not global).
+4. **Root mount options:** `noatime` (and maybe `commit=120`) for less
+   write amplification. It lives in `hardware-configuration.nix`, which
+   is generator output, so it would go in `system.nix` as an override.
+5. **Rust build dirs:** `cargo-sweep` or a periodic `cargo clean` across
+   `~/projects`. Stale `target/` dirs reached 64 GiB.
+6. **MangoHud config** checked in via home-manager, for consistent
+   frame-time, 1% low and GPU power measurements.
+7. **Proton-GE:** record the version in use and the games that need it,
+   so rebuilds don't regress.
+8. **k3s on the gaming host:** ~0.7 GiB RSS at idle. Still worth
+   re-asking whether it belongs here, or gating it behind a flag.
+9. **iGPU (Raphael)** for the compositor, leaving the 4070 to games.
+   Advanced; not before the simpler wins.
 
-### 8. Proton & compatibility
-- **Current:** protonup-qt installed; nothing pinned.
-- **Opportunity:** document the Proton-GE version in use and the one or two
-  games that benefit from it, so rebuilds don't regress.
-
-### 9. Controller & peripheral polish
-- **Current:** xpadneo + headsetcontrol installed.
-- **Opportunity:** confirm xpadneo rumble/trigger support per controller,
-  consider `services.hardware.openrgb` if RGB control is wanted.
-
-### 10. Observability
-- **Current:** MangoHud + nvtop installed.
-- **Opportunity:** a repeatable MangoHud config (frame-time graph, 1% lows,
-  GPU power) checked in via home-manager so measurements are consistent
-  across sessions.
+NVAPI note: it occasionally breaks kernel anti-cheat titles; turn it off
+per game if needed.
 
 ## Unknowns to capture before tuning
 
@@ -126,23 +113,10 @@ Nothing here is applied yet — these are candidates.
   (DSC gets us to 240 Hz, but confirm the EDID is negotiating what we expect
   via `kscreen-doctor -o` or `wayland-info`).
 - **EXPO status:** is DDR5 running at rated speed? `sudo dmidecode -t memory`
-  will confirm. Zen 4 is very memory-bandwidth sensitive; stock JEDEC speeds
-  leave meaningful FPS on the table.
-- **PBO / Curve Optimizer:** 7600X loves an undervolt via PBO CO
-  (-20 to -30 typical). BIOS-side change — not Nix — but worth tracking here.
-- **NVMe model & thermals:** single-disk ext4; shader stutter correlates with
-  slow NVMe under sustained write.
+  will confirm. Zen 4 is very memory-bandwidth sensitive.
+- **PBO / Curve Optimizer:** 7600X undervolt via PBO CO (-20 to -30
+  typical). BIOS-side, not Nix.
+- **NVMe model & thermals:** shader stutter correlates with slow NVMe under
+  sustained write.
 - **Game mix:** competitive FPS vs AAA single-player changes which knobs
   matter.
-
-## Non-gaming notes
-
-- Ollama runs with `CUDA_VISIBLE_DEVICES=0`. If a game and a model are
-  loaded at the same time, they'll fight over the 4070's 12 GB — consider a
-  systemd drop-in to pause the ollama service during gamemode sessions, or
-  constrain it to CPU when a game is running.
-- k3s is enabled — baseline CPU/RAM load is non-trivial on a 6-core CPU.
-  Confirm it's wanted on the gaming host or gate it behind a flag.
-- iGPU (Raphael) is currently unused. Could be assigned to desktop
-  compositor and leave the 4070 fully for games — advanced setup, not
-  recommended until the simpler wins are in.

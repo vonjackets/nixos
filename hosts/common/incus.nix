@@ -65,6 +65,10 @@
           name = "agent";
           config = {
             "limits.cpu" = "4";
+            # 0-10, default 10. Three agents at 4 vCPUs each cover all 12
+            # host threads; under contention the desktop, games and k3s win.
+            # Applies live to running VMs.
+            "limits.cpu.priority" = "4";
             "limits.memory" = "8GiB";
             # VM instances booting unsigned images (nixos/unstable,
             # debian/13, ...) can't satisfy secureboot. Containers ignore
@@ -77,6 +81,20 @@
             type = "disk";
             size = "30GiB";
           };
+        }
+        {
+          # Stack on VMs so memory they free goes back to the host (the
+          # balloon's free-page reporting; Incus leaves it off). Pairs with
+          # the guest-side page-cache drop in agent-vm.nix. A profile of its
+          # own because raw.qemu.conf can't change while a VM using it runs:
+          # folding it into `agent` would fail the preseed on every switch
+          # with agents up. Verified 2026-11-08: feature bit 5 set in the
+          # guest; host RSS fell 5.4 -> 2.0 GiB after a cache drop.
+          name = "balloon";
+          config."raw.qemu.conf" = ''
+            [device "qemu_balloon"]
+            free-page-reporting = "on"
+          '';
         }
         {
           # Stack last to strip networking entirely (overrides eth0).

@@ -81,6 +81,15 @@ boots, drop network, or lock users out. Treat it accordingly.
 - Keep host configs composable: use `imports` from `hosts/common/` rather than
   copy-pasting between hosts.
 
+### Homelab housekeeping (standing order)
+- Disk is scarce on rainbow: the Incus pool is a 100 GiB loop file
+  shared by every agent VM. Remove images, containers, volumes,
+  snapshots and build outputs **as soon as they're stopped or
+  superseded**. In particular, after every `incus image import` over an
+  existing alias, delete the superseded (now untagged) image.
+- Details and what's already automated: `hosts/rainbow/HOMELAB.md`,
+  "Housekeeping".
+
 ## When in doubt
 
 Ask. The cost of a clarifying question is a few seconds; the cost of an
