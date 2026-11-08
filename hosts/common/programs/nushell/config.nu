@@ -35,6 +35,14 @@ alias k = kubectl
 alias dyaml = dhall-to-yaml --file
 alias djson = dhall-to-json --file
 alias dfmt = dhall format
+# zellij: attach to a session, creating it from a layout the first time
+# (layouts live in hosts/common/programs/zellij/layouts). `zr` is the
+# rainbow sysadmin workspace. Refuses to nest inside zellij.
+def zj [session: string = "main", --layout (-l): string = "default"] {
+    if ($env.ZELLIJ? != null) { error make {msg: $"already inside zellij session ($env.ZELLIJ_SESSION_NAME? | default '?')"} }
+    ^zellij --layout $layout attach --create $session
+}
+def zr [] { zj rainbow --layout rainbow }
 # --- Handy utilities ---
 # configure to use zoxide
 source ~/.config/nushell/.zoxide.nu

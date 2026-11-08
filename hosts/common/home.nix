@@ -106,6 +106,18 @@ in
     source = ./programs/ghostty.config;
     force = true;
   };
+  # zellij (installed in packages.nix). A plain file rather than
+  # programs.zellij: keybinds read better as KDL, and programs.zellij's
+  # shell integrations would auto-start zellij in every shell (Zed's
+  # terminal included). `zr` in config.nu opens the rainbow layout.
+  home.file.".config/zellij/config.kdl" = {
+    source = ./programs/zellij/config.kdl;
+    force = true;
+  };
+  home.file.".config/zellij/layouts" = {
+    source = ./programs/zellij/layouts;
+    recursive = true;
+  };
   home.sessionVariables = {
       PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
     };

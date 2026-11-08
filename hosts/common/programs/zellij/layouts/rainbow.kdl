@@ -1,0 +1,27 @@
+// Sysadmin workspace for rainbow and its homelab. Open with `zr` (nushell),
+// i.e. `zellij attach --create rainbow` with this layout the first time.
+layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="zellij:compact-bar"
+        }
+        children
+    }
+    tab name="nixos" focus=true {
+        pane cwd="~/projects/nixos"
+    }
+    tab name="homelab" {
+        pane split_direction="vertical" size="40%" {
+            pane name="agents" command="watch" {
+                args "-n" "10" "incus" "list" "--project" "dev" "-c" "nsmu"
+            }
+            pane name="pressure" command="watch" {
+                args "-n" "30" "sh" "-c" "free -h; echo; cat /proc/pressure/memory; echo; incus storage info default | grep -E 'space used|total space'; df -h / | tail -1"
+            }
+        }
+        pane cwd="~/projects/nixos"
+    }
+    tab name="blitz" {
+        pane cwd="~/projects/blitz"
+    }
+}
