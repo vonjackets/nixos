@@ -898,6 +898,8 @@ rm -rf ~/projects/blitz-app
 - Tailscale now or deferred? LAN pairing is fine while I'm at the desk;
   Tailscale unlocks the phone/laptop case. **Next up (2026-11-08):**
   driving the team from the T3 mobile app.
+- **Chatops over Signal:** plan in `CHATOPS.md` (a `relay` instance
+  bridging a "rainbow-ops" Signal group to `sec`). Not built.
 - Pinning strategy for `pkgs.t3code` given upstream's "very very early"
   warning. Probably a dedicated flake input tracking a known-good tag.
 - **Writable Nix store for lanes that build Rust.** A read-only
