@@ -44,30 +44,33 @@ replaced an earlier "only the lead dispatches" rule on 2026-11-07.)
 Rules for every role:
 
 1. **The team runs itself between the gates.** `sec` coordinates: it
-   turns my goal into tasks and hands them to `eng` and `jr` over T3
-   links (see **Team** below). `eng` hands `jr` the low-risk pieces
-   directly and checks its output. Questions go up the chain, `jr` →
-   whoever gave it the task, `eng` → `sec`. Only what `sec` can't
-   settle comes to me.
+   turns my goal into tasks and hands them to `eng`, `test` and `jr`
+   over T3 links (see **Team** below). `eng` and `test` hand `jr` the
+   low-risk pieces directly and check its output. Questions go up the
+   chain, `jr` → whoever gave it the task, `eng`/`test` → `sec`. Only
+   what `sec` can't settle comes to me.
 2. **Gates that stay with me:** merging to `main`, anything applied to a
    cluster or the cloud, new attack surface (ports, egress, credentials),
    and changing what the product is for. An agent that reaches one stops
    and says so in its thread.
 3. **Each role owns its lane's files, and its own docs.** It edits only
-   its lane's paths, and updates the documentation for its own work in
-   the same branch. A change needed in another lane's files goes to that
-   lane's agent as a task (via `sec`), not as an edit.
-4. **Links point down only:** `sec` → `eng-app`, `sec` → `jr`,
-   `eng-app` → `jr`. A driven agent acts with its own credentials and
-   egress, so `jr` (no internet, no keys) never drives anyone. The host
-   enforces the direction at the network as well as in T3.
+   its lane's paths. Updating the documentation its work makes untrue,
+   manuals included, is the last required step of every task, in the
+   same branch. There's no writer role (`doc` was dropped 2026-11-08). A
+   change needed in another lane's files goes to that lane's agent as a
+   task (via `sec`), not as an edit.
+4. **Links point down only:** `sec` → `eng-app`, `sec` → `test`,
+   `sec` → `jr`, `eng-app` → `jr`, `test` → `jr`. A driven agent acts
+   with its own credentials and egress, so `jr` (no internet, no keys)
+   never drives anyone. The host enforces the direction at the network
+   as well as in T3.
 
 | Role | Image | Does | Harness | Writes | Reads | Egress |
 |---|---|---|---|---|---|---|
-| **Lead** (me) | — (host) | Assigns tasks, answers questions, merges, deploys | — | `main` checkout, cluster, cloud | everything | — |
-| **Backend/systems engineer** | `eng` | Writes code: features, fixes, infra sources | Claude Code, Codex | its lane clone at `/work` | my main checkout at `/lead`, `readonly=true` (the clone's origin) | frontier APIs, GitHub |
-| **DevSecOps engineer** (my right hand) | `sec` | Owns the delivery process end to end: pipeline, hardening, config, process docs, findings, reviews, and task proposals for other roles (see below) | Claude Code, Codex | its lane clone at `/work` | my main checkout at `/lead` (all lanes' branches, handoffs, requests); optionally a branch at `/review`; both `readonly=true` | frontier APIs, GitHub |
-| **Technical writer** | `doc` | Updates the docs: manuals, docs build, operator guide | Claude Code, Codex | its lane clone at `/work` | my main checkout at `/lead`, `readonly=true` (the clone's origin) | frontier APIs, GitHub |
+| **Lead** (me) | — (host) | Sets goals, answers questions, merges, deploys; ops until an `ops` instance exists | — | `main` checkout, cluster, cloud | everything | — |
+| **Backend/systems engineer** | `eng` | Writes code: features, fixes, unit tests, infra sources | Claude Code, Codex | its lane clone at `/work` | my main checkout at `/lead`, `readonly=true` (the clone's origin) | frontier APIs, GitHub |
+| **DevSecOps engineer** (my right hand) | `sec` | Owns the delivery process end to end: pipeline, hardening, threat model, config, process docs, findings, reviews, and tasks for other roles (see below) | Claude Code, Codex | its lane clone at `/work` | my main checkout at `/lead` (all lanes' branches, handoffs, requests); optionally a branch at `/review`; both `readonly=true` | frontier APIs, GitHub |
+| **Test engineer** | `test` | Checks independently that the work works: integration and end-to-end suites, load tests, stack checks, release-candidate checks, and checking that the manuals' procedures still hold | Claude Code, Codex | its lane clone at `/work` | my main checkout at `/lead`, `readonly=true` (the clone's origin) | frontier APIs, GitHub; local cluster ingress later (TODO) |
 | **Junior engineer** | `jr` | Lowest-risk tasks I forward: small fixes, lint/fmt cleanups, test scaffolding, second-opinion reviews where a miss is cheap | OpenCode + local model | its own clone at `/work` | my main checkout at `/lead`, `readonly=true` (the clone's origin) | `infer` only |
 | **Model server** | `infer` (container) | Serves the local model to `jr` | Ollama or llama.cpp | — | — | none |
 
@@ -89,6 +92,15 @@ Notes on the table:
   the image, limited to that one local model.
 - **Reviews.** `sec` is the reviewer. A second opinion from `jr` is
   cheap and optional. It never replaces `sec`'s review.
+- **`test` vs `eng` vs `sec`.** `eng` writes unit tests for its own
+  code. `test` owns everything that checks the system from outside:
+  integration, end-to-end and load suites, and their fixtures. `sec`
+  owns the pipeline that runs them, and the threat model the security
+  tests come from. `test` doesn't edit the pipeline, and `sec` doesn't
+  write the suites.
+- **Ops.** Deploying is mine for now (rule 2's gate), with `eng`
+  writing the `infra/` sources. When cloud work resumes, an `ops`
+  instance can be launched from the `eng` image.
 
 ### `sec`: the DevSecOps engineer
 
@@ -128,7 +140,7 @@ the delivery process itself.
 - **Findings**: an observation, the evidence for it, its cost or risk,
   and a recommendation with an ROI estimate. These answer the core
   questions above and are written for me to read and decide on.
-- **Tasks for `eng` and `jr`**, started directly in their environments
+- **Tasks for `eng`, `test` and `jr`**, started directly in their environments
   over its T3 links, each with a clear done-condition. It reviews what
   comes back before calling the goal done. If a task needs a decision
   from me (a gate, rule 2), it says so and waits.
@@ -153,15 +165,19 @@ merge, and can't apply to a cluster. Those are mine.
 ### Team: how the agents coordinate
 
 ```
-            me (host T3: watches all three, owns the gates)
-             │ goal
-             ▼
-            sec ──────────────┐   Claude Code; coordinates and reviews
-             │ link           │ link
-             ▼                ▼
-          eng-app ─────────▶ jr   eng-app: Claude Code; jr: OpenCode + gemma4:12b
-                  link
+               me (host T3: watches every session, owns the gates)
+                │ goal
+                ▼
+               sec            Claude Code; coordinates, reviews, threat model
+        ┌───────┼────────┐
+        ▼       │        ▼
+     eng-app    │      test   Claude Code; implementation / verification
+        │       ▼        │
+        └────▶  jr  ◀────┘    OpenCode + gemma4:12b; low-risk pieces
 ```
+
+`test` is planned (2026-11-08) and not launched yet; the Nix side
+(image, peers, link table) is in place.
 
 **Mechanism.** Each arrow is a `t3 environment link`, created in the
 upper VM. Agents in that VM's T3 sessions get T3's tools for the linked
@@ -172,8 +188,10 @@ next turn. Each link:
 - has **only `orchestration:read` and `orchestration:operate`** scopes,
   so threads only. No terminal, filesystem, settings, provider or token
   scopes; T3's default pairing grants all of those.
-- runs at **`auto-accept-edits`** access. The driven agent edits its own
-  lane clone without asking anyone, but nothing runs at full access.
+- runs at the access I picked for its target, never full access. A
+  driven agent edits its own lane clone without asking anyone.
+  `eng-app` and `test` are linked at **`auto`**; `jr` at
+  **`auto-accept-edits`** (it hasn't earned more), from every source.
 - goes over a **loopback forwarder** in the upper VM
   (`http://127.0.0.1:4730x`, from `homelab.agentVm.t3Peers`). T3 only
   links over plain http to loopback or Tailscale, so the link token
@@ -183,7 +201,7 @@ next turn. Each link:
   link runbook below.
 
 **Picking models.** T3 projects have no default model, so whoever starts
-a thread names one. `eng-app`/`sec`: provider `claudeAgent`, e.g.
+a thread names one. `eng-app`/`sec`/`test`: provider `claudeAgent`, e.g.
 `claude-sonnet-5-5` or `claude-opus-5-5`. `jr`: provider `opencode`,
 model `ollama/gemma4:12b` (the only one it offers).
 
@@ -195,16 +213,19 @@ files changed.
 `claudeAgent`):
 
 ```
-You coordinate a three-agent team for the lead (me) who is watching and primarily responsible for goal setting, maintaining alignment with project vision, and architecutre.
+You coordinate an agent team for the lead (me) who is watching and primarily responsible for goal setting, maintaining alignment with project vision, and architecutre.
 
 Your linked environments: eng-app (backend/systems engineer, Claude Code,
-lane clone /work on lane/app) and jr (junior engineer, OpenCode with
-ollama/gemma4:12b, lane clone /work on lane/jr, lowest-risk work only).
-Read /lead/AGENTS.md and /lead/docs/lanes/README.md first. Team rules on
-top of those: links point down (you -> eng-app, you -> jr, eng-app -> jr);
-questions go up; each agent edits only its lane and updates the docs for
-its own work; stop at the gates (merge, cluster/cloud apply, new
-ports/egress/credentials, product direction). 
+lane clone /work on lane/app), test (test engineer, Claude Code, lane
+clone /work on lane/test; once launched) and jr (junior engineer,
+OpenCode with ollama/gemma4:12b, lane clone /work on lane/jr,
+lowest-risk work only). Read /lead/AGENTS.md and
+/lead/docs/lanes/README.md first. Team rules on top of those: links
+point down (you -> eng-app/test/jr, eng-app/test -> jr); questions go
+up; each agent edits only its lane, and updating the docs (manuals
+included) its work makes untrue is the last step of every task; stop at
+the gates (merge, cluster/cloud apply, new ports/egress/credentials,
+product direction). 
 
 The project's AGENTS.md and other docs specify rules that every agent should adhere to. If one is not present or unclear, ask me and I will clarify.
 
@@ -214,17 +235,20 @@ The project's AGENTS.md and other docs specify rules that every agent should adh
 
 Blitz (`~/projects/blitz`) already runs this shape as swimlanes
 (`docs/lanes/README.md`). Each lane has one checkout and one branch, and
-owns explicit paths:
+owns explicit paths. **Planned 2026-11-08:** consolidate Blitz's lanes
+A–E into four, split by function rather than by part of the product.
+The draft is in Blitz at `docs/lanes/PROPOSAL-2026-11-08-lanes.md`
+(uncommitted); `sec` lands it after its current goal.
 
-| Blitz lane | Role / instance | Lane clone mounted at `/work` |
-|---|---|---|
-| Lead | me, on the host | `~/projects/blitz` (main) |
-| A. Cloud path (paused) | `eng`, when it resumes | `../blitz-cloud` |
-| B. Implementation | `eng` → `eng-app` | `../blitz-app` |
-| C. Engine and model | `eng` → `eng-view` | `../blitz-view` |
-| D. DevSecOps | `sec` | `../blitz-hardening` (+ `~/projects/blitz` at `/lead`, read-only) |
-| E. User manual | `doc` | `../blitz-manual` |
-| (none yet) | `jr` | a clone per forwarded task, on a branch I name |
+| Blitz lane (planned) | Was | Role / instance | Lane clone mounted at `/work` |
+|---|---|---|---|
+| Lead | Lead | me, on the host | `~/projects/blitz` (main) |
+| Ops | A (paused) | me for now; `ops` from the `eng` image later | `../blitz-cloud` when it exists |
+| Implementation | B + C | `eng` → `eng-app` | `../blitz-app` |
+| DevSecOps | D | `sec` | `../blitz-hardening` (+ `~/projects/blitz` at `/lead`, read-only) |
+| Test | new | `test` | `../blitz-test` |
+| (the manual) | E (retired) | every role, as the last step of each task | — |
+| (none) | — | `jr` | `../blitz-jr`, on `lane/jr` |
 
 Each lane's kickoff message (`docs/lanes/KICKOFF.md`) is the first thing
 I paste into that instance's T3 thread. The lanes' rules (stage by path,
@@ -270,7 +294,7 @@ Agent VM images:
   as `agent`. It restarts on failure and starts at boot after
   `incus-agent` has mounted `/work`. Options: `homelab.agentVm.{role,
   description, workDir, t3Port}`.
-- `hosts/rainbow/agents/{eng,sec,doc,jr}/configuration.nix` — one per
+- `hosts/rainbow/agents/{eng,sec,test,jr}/configuration.nix` — one per
   role: the role name, a description, and its harness packages.
 - `packages.x86_64-linux.<role>-image-{disk,metadata}` for each role in
   `flake.nix`'s `roles` list. They build the qcow2 and metadata tarball
@@ -307,7 +331,7 @@ Not yet in Nix:
   instances can reach the internet. Per role:
   - `jr`: **no internet** (done, in `hosts/rainbow/homelab.nix`). An
     nftables forward chain drops any new connection from `10.80.0.50`.
-  - `eng`, `sec`, `doc`: still open. The target allowlist is
+  - `eng`, `sec`, `test`: still open. The target allowlist is
     `api.anthropic.com`, `api.openai.com`, `api.github.com`,
     `objects.githubusercontent.com`. Hostname allowlists need either a
     DNS-aware filter or Incus ACLs. The exact Incus ACL flags vary by
@@ -318,8 +342,8 @@ Not yet in Nix:
   DHCP pool (`.100`–`.254`). They also assume no other instance claims
   it. Turning on `security.ipv4_filtering` on every instance's NIC would
   enforce that; it's a TODO.
-- **Permission modes.** Keep Full access off. Engineer and writer threads
-  run Supervised or Auto-accept edits. Review threads run Supervised. `jr`
+- **Permission modes.** Keep Full access off. Engineer and test threads
+  run Supervised or auto. Review threads run Supervised. `jr`
   runs Supervised until it has earned more.
 - **Pin T3.** Under Nix, T3 is updated through Nix, not `t3 update`. The
   version is whatever `flake.lock` pins, and images only change when
@@ -372,7 +396,7 @@ for. If gemma falls short on real tasks, gpt-oss-20b is the fallback.
 - `ollama-bridge.socket` listens only on `10.80.0.1:11434` (the bridge
   address) and forwards to Ollama through `systemd-socket-proxyd`.
 - The host firewall admits only `jr`'s pinned address (`10.80.0.50`) to
-  that port. `eng`, `sec` and `doc` can't reach it.
+  that port. `eng`, `sec` and `test` can't reach it.
 - While a game is running (gamemode stops `ollama.service`), `jr`'s
   requests fail until it's back.
 
@@ -410,7 +434,7 @@ Already done:
 - Incus base (`hosts/common/incus.nix`): bridge, pool, profiles, `dev`
   project, host-input lockdown on the bridge, `incus-admin` group.
 - `pkgs.t3code` on the host.
-- Shared agent module and the `eng` / `sec` / `doc` / `jr` image outputs.
+- Shared agent module and the `eng` / `sec` / `test` / `jr` image outputs.
 - Host Ollama + gamemode stop/start hook.
 - Host k3s (still worth re-questioning whether it belongs on the gaming
   host — see `STATUS.md`).
@@ -447,12 +471,31 @@ Next:
    project everywhere, and a `sec` → `jr` link test passed. Needs my host
    switch for the link-direction table. Old instance snapshots
    (`baseline`) were lost with the rebuild; retake them.
-6. **`doc`** for lane E. Maybe not needed: each role now updates its own
-   docs.
+6. **`test`** for the test lane. Replaces `doc` (dropped 2026-11-08:
+   each role updates its own docs, manuals included). Nix side done:
+   image, `10.80.0.60`, sec's peer at `47303`, link table allows
+   `sec` → `test` and `test` → `jr`. Left for me, after the host switch
+   and once `sec` has landed the Blitz lane change: build and import
+   `test-vm`, make `~/projects/blitz-test` on `lane/test`, launch it with
+   the runbook below (`home-test` volume, pinned address,
+   `ipv4_filtering`), re-roll `sec` so it gets the `47303` forwarder,
+   pair, log in, then `link sec test 47303 auto` and
+   `link test jr 47302 auto-accept-edits`.
+7. **Where `test` runs things against a live stack.** Two separate
+   questions, both new attack surface in `homelab.nix`, decided when
+   needed:
+   - Stack checks (`signin-check.py`, `api-check.py`) against my local
+     cluster: HTTP(S) to its ingress only, no Kubernetes API or
+     kubeconfig; deploys stay mine.
+   - Load tests: Blitz's load-testing plan
+     (`docs/architecture/load-testing-plan.md`) says runs happen on a
+     **disposable cluster, never the lead's**. So `test` needs somewhere
+     disposable to point at (another Incus instance running k3s, or a
+     cloud sandbox), not a route to mine.
 
 Later:
 
-7. `infer` (GPU container): move Ollama off the host, repoint `jr`'s
+8. `infer` (GPU container): move Ollama off the host, repoint `jr`'s
    baseURL, and extend the gamemode hook to pause `infer`.
 
 ## Runbook: launching a role instance
@@ -622,19 +665,27 @@ printed. `from` must list `to` in `homelab.agentVm.t3Peers` (that gives
 the loopback port), and the host link table must allow the pair.
 
 ```bash
-link() { # from to local-port
+link() { # from to local-port access
   TOK=$(incus exec $2 -- su - agent -c "t3 pair --ttl 2m --label link-from-$1 \
     --scope orchestration:read --scope orchestration:operate" | sed -n 's/^Token: //p')
+  [ -n "$TOK" ] || { echo "no token from $2"; return 1; }
   incus exec $1 --user 1000 --group 100 --cwd /home/agent \
     --env HOME=/home/agent --env PC="$TOK" -- bash -lc \
-    "t3 environment link --pairing-code \"\$PC\" --access auto-accept-edits http://127.0.0.1:$3"
+    "t3 environment link --pairing-code \"\$PC\" --access $4 http://127.0.0.1:$3"
   unset TOK
 }
-link sec eng-app 47301
-link sec jr 47302
-link eng-app jr 47302
+link sec eng-app 47301 auto
+link sec test 47303 auto
+link sec jr 47302 auto-accept-edits
+link eng-app jr 47302 auto-accept-edits
+link test jr 47302 auto-accept-edits
 incus exec sec -- su - agent -c 't3 environment list'
 ```
+
+Loopback ports are per target: `eng-app` 47301, `jr` 47302, `test`
+47303. On 2026-11-08 every link had disappeared at once (cause unknown);
+I relinked `sec` → `eng-app` and `sec` → `jr` only. `eng-app` → `jr` is
+still unlinked.
 
 Links expire after 30 days. Re-running `link` renews one. Revoke one in
 the target's T3 under Settings → Connections, or `t3 environment unlink`
