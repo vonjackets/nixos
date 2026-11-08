@@ -32,25 +32,35 @@ notes. Plan on two or three VMs running at once, not all of them.
 ## Roles
 
 **I am the lead.** I'm the maintainer of every project these agents work
-on. Tasks come from me, questions go to me, and I merge. There is no
-architect agent; that was the first cut's `arch` role, and it's gone.
+on. I set the goal and I merge. There is no architect agent; that was
+the first cut's `arch` role, and it's gone.
 
-Three rules apply to every role:
+**The point of this homelab is to see agents coordinate and get work
+done without me in the loop.** I hand a goal to `sec`; the team plans,
+splits, builds, reviews and documents it among themselves; I watch every
+session live in my host T3 and step in only at the gates below. (This
+replaced an earlier "only the lead dispatches" rule on 2026-11-07.)
 
-1. **Tasks come from the lead.** An agent does the task it was given and
-   stops. It doesn't pick up work on its own, and it doesn't take work
-   from another agent.
-2. **Questions go to the lead.** If an agent is blocked or unsure, it
-   asks me in its T3 thread and waits. It doesn't route around a refusal
-   or guess at intent. Agents don't talk to each other directly.
-3. **Changes outside a role's lane are requests, not edits.** A role that
-   needs a change in another lane's files writes a request on its own
-   branch; I relay it. (This is Blitz's `docs/lanes/README.md` rule 2,
-   and it's the same here.)
-4. **Only I dispatch.** `sec` can *propose* tasks for other roles, but a
-   proposal is not a task until I approve it and paste it into the target
-   role's thread. No agent links to or messages another agent's
-   environment (`t3 environment` stays unused for now).
+Rules for every role:
+
+1. **The team runs itself between the gates.** `sec` coordinates: it
+   turns my goal into tasks and hands them to `eng` and `jr` over T3
+   links (see **Team** below). `eng` hands `jr` the low-risk pieces
+   directly and checks its output. Questions go up the chain, `jr` →
+   whoever gave it the task, `eng` → `sec`. Only what `sec` can't
+   settle comes to me.
+2. **Gates that stay with me:** merging to `main`, anything applied to a
+   cluster or the cloud, new attack surface (ports, egress, credentials),
+   and changing what the product is for. An agent that reaches one stops
+   and says so in its thread.
+3. **Each role owns its lane's files, and its own docs.** It edits only
+   its lane's paths, and updates the documentation for its own work in
+   the same branch. A change needed in another lane's files goes to that
+   lane's agent as a task (via `sec`), not as an edit.
+4. **Links point down only:** `sec` → `eng-app`, `sec` → `jr`,
+   `eng-app` → `jr`. A driven agent acts with its own credentials and
+   egress, so `jr` (no internet, no keys) never drives anyone. The host
+   enforces the direction at the network as well as in T3.
 
 | Role | Image | Does | Harness | Writes | Reads | Egress |
 |---|---|---|---|---|---|---|
@@ -75,8 +85,8 @@ Notes on the table:
   a package installed doesn't spread any credential. Once a winner per
   role is clear, drop the other from that role's `configuration.nix`.
 - **`jr`'s model is `gemma4:12b`** (Q4_K_M, ~8 GB, tool-capable). OpenCode
-  points at an Ollama OpenAI-compatible endpoint. The provider config is
-  per-user state inside the VM for now, not baked into the image.
+  points at an Ollama OpenAI-compatible endpoint. Its config is baked into
+  the image, limited to that one local model.
 - **Reviews.** `sec` is the reviewer. A second opinion from `jr` is
   cheap and optional. It never replaces `sec`'s review.
 
@@ -118,10 +128,13 @@ the delivery process itself.
 - **Findings**: an observation, the evidence for it, its cost or risk,
   and a recommendation with an ROI estimate. These answer the core
   questions above and are written for me to read and decide on.
-- **Proposed tasks** for other roles (`eng`, `doc`, `jr`), written in
-  the project's request/kickoff format so I can approve one and paste it
-  as-is. It proposes and I dispatch (rule 4). If a proposal needs a
-  decision from me, it says so and waits.
+- **Tasks for `eng` and `jr`**, started directly in their environments
+  over its T3 links, each with a clear done-condition. It reviews what
+  comes back before calling the goal done. If a task needs a decision
+  from me (a gate, rule 2), it says so and waits.
+- **A run log** in its lane: what my goal became, who did what, what it
+  reviewed, what it would change about the process next time. This is
+  the record of how the team performed.
 
 **What it can see.** My main checkout is mounted read-only at `/lead`,
 so `git show lane/<x>:<path>` reads every lane's branch, handoff and
@@ -135,8 +148,67 @@ work lives in the lane clones until then. That fetch is also what
 "hand it to `sec` for review" means in practice.
 
 **What it can't do.** It can't write outside its own lane clone, can't
-dispatch to other agents, can't merge, and can't apply to a cluster.
-Those are mine.
+merge, and can't apply to a cluster. Those are mine.
+
+### Team: how the agents coordinate
+
+```
+            me (host T3: watches all three, owns the gates)
+             │ goal
+             ▼
+            sec ──────────────┐   Claude Code; coordinates and reviews
+             │ link           │ link
+             ▼                ▼
+          eng-app ─────────▶ jr   eng-app: Claude Code; jr: OpenCode + gemma4:12b
+                  link
+```
+
+**Mechanism.** Each arrow is a `t3 environment link`, created in the
+upper VM. Agents in that VM's T3 sessions get T3's tools for the linked
+environment: list projects, start a thread with a chosen provider and
+model, message it, read its replies. A busy thread gets a message as its
+next turn. Each link:
+
+- has **only `orchestration:read` and `orchestration:operate`** scopes,
+  so threads only. No terminal, filesystem, settings, provider or token
+  scopes; T3's default pairing grants all of those.
+- runs at **`auto-accept-edits`** access. The driven agent edits its own
+  lane clone without asking anyone, but nothing runs at full access.
+- goes over a **loopback forwarder** in the upper VM
+  (`http://127.0.0.1:4730x`, from `homelab.agentVm.t3Peers`). T3 only
+  links over plain http to loopback or Tailscale, so the link token
+  crosses the host-internal bridge unencrypted. That's acceptable on a
+  bridge with anti-spoofing; Tailscale is the upgrade.
+- **expires after 30 days** (current ones: 2026-12-08). Renew with the
+  link runbook below.
+
+**Picking models.** T3 projects have no default model, so whoever starts
+a thread names one. `eng-app`/`sec`: provider `claudeAgent`, e.g.
+`claude-sonnet-5-5` or `claude-opus-5-5`. `jr`: provider `opencode`,
+model `ollama/gemma4:12b` (the only one it offers).
+
+**Verified 2026-11-07:** `sec`'s Claude found `jr` over its link, started
+a thread on gemma, waited, and relayed `PONG`, in about 35s, with no
+files changed.
+
+**Kicking off a goal** (paste into a new `sec` thread, with
+`claudeAgent`):
+
+```
+You coordinate a three-agent team for the lead (me) who is watching and primarily responsible for goal setting, maintaining alignment with project vision, and architecutre.
+
+Your linked environments: eng-app (backend/systems engineer, Claude Code,
+lane clone /work on lane/app) and jr (junior engineer, OpenCode with
+ollama/gemma4:12b, lane clone /work on lane/jr, lowest-risk work only).
+Read /lead/AGENTS.md and /lead/docs/lanes/README.md first. Team rules on
+top of those: links point down (you -> eng-app, you -> jr, eng-app -> jr);
+questions go up; each agent edits only its lane and updates the docs for
+its own work; stop at the gates (merge, cluster/cloud apply, new
+ports/egress/credentials, product direction). 
+
+The project's AGENTS.md and other docs specify rules that every agent should adhere to. If one is not present or unclear, ask me and I will clarify.
+
+```
 
 ### Mapping onto Blitz
 
@@ -369,11 +441,18 @@ Next:
    internet by name or IP but DNS still resolves through the host;
    `eng-app` and `sec` can't reach the proxy and still have internet.
    Left for me: pair, snapshot `baseline`.
-5. **`doc`** for lane E.
+5. **Team wired** (2026-11-07): persistent block home volumes for all
+   three (logins and pairings carried over), anti-spoofing on, down-only
+   T3 links created over loopback forwarders, `/work` registered as a T3
+   project everywhere, and a `sec` → `jr` link test passed. Needs my host
+   switch for the link-direction table. Old instance snapshots
+   (`baseline`) were lost with the rebuild; retake them.
+6. **`doc`** for lane E. Maybe not needed: each role now updates its own
+   docs.
 
 Later:
 
-6. `infer` (GPU container): move Ollama off the host, repoint `jr`'s
+7. `infer` (GPU container): move Ollama off the host, repoint `jr`'s
    baseURL, and extend the gamemode hook to pause `infer`.
 
 ## Runbook: launching a role instance
@@ -417,15 +496,23 @@ git -C blitz-app remote set-url origin /lead
 ```bash
 incus project switch dev
 
+# Persistent home: an Incus *block* volume (the guest formats it ext4 and
+# mounts it at /home/agent). Not a filesystem volume: those reach a VM
+# over virtiofs, where T3's SQLite (WAL mode) fails with "disk I/O error".
+incus storage volume create default home-eng-app --type=block size=10GiB
+
 # Create without starting, so every device is in place before first boot.
 # (Disk devices can't be hot-added to a running VM: QEMU has no free PCI
-# slot for virtiofs. On an existing instance, stop -> add -> start, and
-# don't stop it mid-first-boot; that hung once and needed -f.)
-# The agent profile sets security.secureboot=false, so the unsigned
-# NixOS kernel boots cleanly.
+# slot. On an existing instance, stop -> add -> start, and don't stop it
+# mid-first-boot; that hung once and needed -f.) The agent profile sets
+# security.secureboot=false, so the unsigned NixOS kernel boots cleanly.
 incus init eng-vm eng-app --vm -p default -p agent
-# jr only: pin its address (host rules key on it).
-# incus config device override jr eth0 ipv4.address=10.80.0.50
+# Every instance: a pinned address (host rules key on it) and anti-spoofing
+# so no other instance can claim it. New instances use .2-.99.
+incus config device override eng-app eth0 \
+  ipv4.address=10.80.0.126 security.ipv4_filtering=true
+# The device must be named `home`: the guest finds it as ...incus_home.
+incus config device add eng-app home disk pool=default source=home-eng-app
 # One writer per branch: while it's mounted, this instance owns lane/app.
 incus config device add eng-app work disk \
   source=/home/vcaaron/projects/blitz-app path=/work
@@ -434,11 +521,34 @@ incus config device add eng-app work disk \
 # reads other lanes' branches through it.
 incus config device add eng-app lead disk \
   source=/home/vcaaron/projects/blitz path=/lead readonly=true
+# Every role: the repos Blitz depends on, read-only. Blitz references
+# them as ../ACE from its repo root, and /work/.. and /lead/.. are both /,
+# so mount at /ACE and /Polar. Only these two: other projects under
+# ~/projects hold .env files that eng/sec (internet) shouldn't read. Polar
+# itself carries .env.nuon, .env.ci.nuon and dev/tmp/ca.key; accepted
+# 2026-11-07. Lane A would need Polar writable (it commits there); not
+# while A is paused.
+incus config device add eng-app ace disk \
+  source=/home/vcaaron/projects/ACE path=/ACE readonly=true
+incus config device add eng-app polar disk \
+  source=/home/vcaaron/projects/Polar path=/Polar readonly=true
 # sec only, optional: a specific branch under review, read-only.
 # incus config device add sec review disk \
 #   source=/home/vcaaron/projects/blitz-app path=/review readonly=true
 incus start eng-app
+
+# Register the lane as a T3 project so threads (including ones other
+# agents start over a link) have somewhere to run.
+incus exec eng-app -- su - agent -c 't3 project add /work --title blitz'
+# Docs say ~/projects/ACE and ~/projects/Polar; the symlinks live on the
+# home volume, so this is once per instance.
+incus exec eng-app -- su - agent -c \
+  'mkdir -p ~/projects && ln -sfn /ACE ~/projects/ACE && ln -sfn /Polar ~/projects/Polar'
 ```
+
+A new instance or a new pinned address also needs the host side
+(`hosts/rainbow/homelab.nix`): its address in any rule that should cover
+it, and in the link table if it takes part in links.
 
 ### Bringing lane work back (host)
 
@@ -479,8 +589,10 @@ incus snapshot create eng-app baseline
 incus snapshot restore eng-app baseline
 ```
 
-A snapshot covers the **VM's disk only**: tools, harness logins, T3
-state. It does **not** cover `/work` or `/lead`, which are host
+An instance snapshot covers the **root disk only**: OS and tools. It
+does **not** cover the home volume (harness logins, T3 state, links),
+which is snapshotted on its own (`incus storage volume snapshot create
+default home-eng-app <name>`), or `/work` and `/lead`, which are host
 directories. Roll back code with git in the lane (`git reset --hard
 origin/main` inside the VM, or discard the lane branch), not with
 `snapshot restore`.
@@ -488,15 +600,45 @@ origin/main` inside the VM, or discard the lane branch), not with
 ### Re-rolling the image
 
 When a role's `configuration.nix` or `hosts/common/agent-vm.nix`
-changes, rebuild and re-import under the same alias (above). Existing
-instances don't update themselves. Either launch fresh ones from the
-new alias, or replace the old one:
+changes, rebuild and re-import under the same alias (above). Instances
+don't update themselves; recreate them. **The home volume carries over**,
+so harness logins, T3 pairing, projects and links all survive. Only the
+root disk is replaced.
 
 ```bash
-incus delete -f eng-app && incus launch eng-vm eng-app --vm -p default -p agent
-# then re-add the disk devices. Harness logins and T3 pairing are lost
-# with the instance's disk.
+incus delete -f eng-app
+# then the `incus init` ... `incus start` block from "Launch and mount the
+# lane", skipping the `storage volume create`. Same IP, same devices.
 ```
+
+Done this way for `jr` on 2026-11-07: settings, projects and
+`eng-app`'s link to it all came through unchanged.
+
+### Links between environments (team wiring)
+
+Run on the host for each down-only link (`from` → `to`). The token is
+minted in `to` with thread-only scopes, piped into `from`, and never
+printed. `from` must list `to` in `homelab.agentVm.t3Peers` (that gives
+the loopback port), and the host link table must allow the pair.
+
+```bash
+link() { # from to local-port
+  TOK=$(incus exec $2 -- su - agent -c "t3 pair --ttl 2m --label link-from-$1 \
+    --scope orchestration:read --scope orchestration:operate" | sed -n 's/^Token: //p')
+  incus exec $1 --user 1000 --group 100 --cwd /home/agent \
+    --env HOME=/home/agent --env PC="$TOK" -- bash -lc \
+    "t3 environment link --pairing-code \"\$PC\" --access auto-accept-edits http://127.0.0.1:$3"
+  unset TOK
+}
+link sec eng-app 47301
+link sec jr 47302
+link eng-app jr 47302
+incus exec sec -- su - agent -c 't3 environment list'
+```
+
+Links expire after 30 days. Re-running `link` renews one. Revoke one in
+the target's T3 under Settings → Connections, or `t3 environment unlink`
+in the source.
 
 ### Detach when the lane's work is merged
 
@@ -519,9 +661,13 @@ rm -rf ~/projects/blitz-app
   - An idempotent systemd oneshot on rainbow (after `incus.service`) that
     imports missing images, launches missing instances, and sets
     `boot.autostart`.
-- **Re-rolls lose state.** Replacing an instance loses harness logins and
-  T3 pairing. Consider a per-instance Incus storage volume mounted at
-  `/home/agent` so a re-roll keeps them.
+- **Encrypt the T3 links.** They run over plain http through loopback
+  forwarders (T3 refuses plain http otherwise). Tailscale in each VM would
+  let T3 link over tailnet addresses natively, and the same work covers
+  phone/laptop access.
+- **Link renewal.** Links expire after 30 days (current: 2026-12-08), and
+  renewing them is a manual `link` run. Could become a host timer, but
+  that would make the host mint tokens on a schedule. Decide when it bites.
 - NixOS vs Debian for `infer` (leaning Debian for GPU container
   ergonomics). The agent roles are NixOS.
 - Secrets: `sops-nix` vs `agenix` for per-instance GitHub PATs.

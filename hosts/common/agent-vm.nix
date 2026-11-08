@@ -55,9 +55,61 @@ in
         sees the same configuration T3 does. Public — no secrets.
       '';
     };
+
+    t3Settings = lib.mkOption {
+      type = lib.types.attrsOf lib.types.anything;
+      default = { };
+      example = { linkedEnvironmentsEnabled = true; };
+      description = ''
+        Keys merged into T3's server settings (~/.t3/userdata/settings.json)
+        each time t3-serve starts. Keys set here win; everything else in the
+        file, including what's changed in the UI, is kept.
+      '';
+    };
+
+    t3Peers = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.submodule {
+        options = {
+          address = lib.mkOption {
+            type = lib.types.str;
+            description = "Peer instance's pinned bridge address.";
+          };
+          localPort = lib.mkOption {
+            type = lib.types.port;
+            description = "Loopback port in this VM that forwards to the peer's T3.";
+          };
+        };
+      });
+      default = { };
+      example = { jr = { address = "10.80.0.50"; localPort = 47302; }; };
+      description = ''
+        T3 environments this VM's agents may link to (`t3 environment link
+        http://127.0.0.1:<localPort>`). T3 only links over plain http to
+        loopback or Tailscale addresses, so each peer gets a loopback
+        forwarder. The link token crosses the host-internal bridge
+        unencrypted. Which links are allowed at all is enforced on the host
+        (hosts/rainbow/homelab.nix), not here.
+      '';
+    };
+
+    persistentHome = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Expect an Incus *block* custom volume attached as a disk device named
+        `home`, and mount it at /home/agent, so harness logins, T3 pairing
+        and links survive an image re-roll. Formatted ext4 on first boot. A
+        block volume, not a filesystem volume: those reach a VM over
+        virtiofs, where SQLite's WAL mode (T3's state) fails with "disk I/O
+        error".
+      '';
+    };
   };
 
-  config = {
+  config = lib.mkMerge [ {
+    # Agents coordinate through T3 environment links (HOMELAB.md "Team").
+    homelab.agentVm.t3Settings.linkedEnvironmentsEnabled = lib.mkDefault true;
+
     networking.hostName = lib.mkDefault cfg.role;
     time.timeZone = lib.mkDefault "America/New_York";
     i18n.defaultLocale = lib.mkDefault "en_US.UTF-8";
@@ -117,11 +169,22 @@ in
       wantedBy = [ "multi-user.target" ];
       # incus-agent mounts disk devices; start after it so ${cfg.workDir}
       # is the real worktree, not the empty placeholder.
-      after = [ "network-online.target" "incus-agent.service" ];
+      after = [ "network-online.target" "incus-agent.service" ]
+        ++ lib.optional cfg.persistentHome "agent-home.service";
       wants = [ "network-online.target" ];
+      requires = lib.optional cfg.persistentHome "agent-home.service";
       # Harnesses spawned by T3 need git, nix, sudo and themselves on PATH.
       path = [ "/run/wrappers" "/run/current-system/sw" ];
       inherit (cfg) environment;
+      # Merge declared settings into T3's settings file (runs as agent).
+      preStart = lib.optionalString (cfg.t3Settings != { }) ''
+        f="$HOME/.t3/userdata/settings.json"
+        mkdir -p "$(dirname "$f")"
+        [ -s "$f" ] || echo '{}' > "$f"
+        ${pkgs.jq}/bin/jq -s '.[0] * .[1]' "$f" \
+          ${pkgs.writeText "t3-settings.json" (builtins.toJSON cfg.t3Settings)} \
+          > "$f.tmp" && mv "$f.tmp" "$f"
+      '';
       serviceConfig = {
         User = "agent";
         Group = "users";
@@ -138,6 +201,35 @@ in
       };
     };
 
+    # Persistent home: Incus names the guest disk after the device
+    # (`home` -> ...incus_home). autoFormat makes a fresh volume ext4 on first
+    # boot; nofail keeps the VM bootable without one, but agent-home (and so
+    # t3-serve) then fails instead of writing state to the throwaway root.
+    fileSystems."/home/agent" = lib.mkIf cfg.persistentHome {
+      device = "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_incus_home";
+      fsType = "ext4";
+      autoFormat = true;
+      options = [ "nofail" "x-systemd.device-timeout=30s" ];
+    };
+
+    # A freshly formatted volume's root is root-owned; hand it to agent.
+    systemd.services.agent-home = lib.mkIf cfg.persistentHome {
+      description = "Prepare the persistent /home/agent volume";
+      requires = [ "home-agent.mount" ];
+      after = [ "home-agent.mount" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+      };
+      path = [ pkgs.coreutils ];
+      script = ''
+        if [ "$(stat -c %u /home/agent)" != 1000 ]; then
+          chown agent:users /home/agent
+          chmod 0700 /home/agent
+        fi
+      '';
+    };
+
     environment.systemPackages = with pkgs; [
       vim
       git
@@ -148,5 +240,28 @@ in
     ];
 
     system.stateVersion = lib.mkDefault "25.05";
-  };
+  }
+  {
+    # Loopback forwarders for T3 links (see the t3Peers option).
+    systemd.sockets = lib.mapAttrs' (name: peer:
+      lib.nameValuePair "t3-peer-${name}" {
+        description = "Loopback forwarder to ${name}'s T3";
+        wantedBy = [ "sockets.target" ];
+        listenStreams = [ "127.0.0.1:${toString peer.localPort}" ];
+      }) cfg.t3Peers;
+    systemd.services = lib.mapAttrs' (name: peer:
+      lib.nameValuePair "t3-peer-${name}" {
+        description = "Loopback forwarder to ${name}'s T3";
+        requires = [ "t3-peer-${name}.socket" ];
+        after = [ "t3-peer-${name}.socket" ];
+        serviceConfig = {
+          ExecStart = "${config.systemd.package}/lib/systemd/systemd-socket-proxyd ${peer.address}:${toString cfg.t3Port}";
+          DynamicUser = true;
+          NoNewPrivileges = true;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          PrivateTmp = true;
+        };
+      }) cfg.t3Peers;
+  } ];
 }

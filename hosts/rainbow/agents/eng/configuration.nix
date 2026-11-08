@@ -14,6 +14,10 @@
   homelab.agentVm = {
     role = "eng";
     description = "Backend/systems engineer";
+    # Down-only links (HOMELAB.md "Team"): eng hands low-risk work to jr.
+    # Instance-specific for now (eng-app); a second eng lane would need
+    # its own peer set.
+    t3Peers.jr = { address = "10.80.0.50"; localPort = 47302; };
   };
 
   # Frontier harnesses. Both are installed so the lead can compare models

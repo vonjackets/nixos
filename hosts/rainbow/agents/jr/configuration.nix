@@ -26,6 +26,9 @@ let
     # Nix owns the version; no self-update, no public share links.
     autoupdate = false;
     share = "disabled";
+    # Only the local model. OpenCode also offers hosted "opencode/*" models;
+    # jr has no internet, so hide them rather than let an agent pick one.
+    enabled_providers = [ "ollama" ];
     provider.ollama = {
       npm = "@ai-sdk/openai-compatible";
       name = "Ollama (rainbow)";
@@ -45,6 +48,8 @@ in
     role = "jr";
     description = "Junior engineer";
     environment.OPENCODE_CONFIG = "/etc/opencode/opencode.json";
+    # T3 providers are opt-in; jr's only harness is OpenCode.
+    t3Settings.providerInstances.opencode = { driver = "opencode"; enabled = true; };
   };
 
   environment.etc."opencode/opencode.json".text = builtins.toJSON opencodeConfig;
