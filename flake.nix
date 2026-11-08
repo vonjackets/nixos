@@ -102,7 +102,7 @@
               "${nixpkgs}/nixos/modules/virtualisation/incus-virtual-machine.nix"
             ];
           };
-        roles = [ "eng" "sec" "doc" "jr" ];
+        roles = [ "eng" "sec" "test" "jr" ];
       in
         lib.foldl' (acc: role:
           let sys = mkAgent role; in

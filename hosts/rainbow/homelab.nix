@@ -7,7 +7,7 @@
 #     (10.80.0.50), via a proxy that forwards to Ollama on 127.0.0.1
 #   - removes all internet egress from jr (it only needs the proxy)
 #   - limits VM-to-VM T3 (3773) to the approved down-only links
-#     sec -> eng-app, sec -> jr, eng-app -> jr
+#     sec -> eng-app, sec -> jr, sec -> test, eng-app -> jr, test -> jr
 # Nothing changes on the LAN-facing interfaces.
 { config, pkgs, ... }:
 let
@@ -18,6 +18,7 @@ let
   # ../common/incus.nix). Applied per instance with:
   #   incus config device override <name> eth0 ipv4.address=<addr> --project dev
   jrAddr = "10.80.0.50";
+  testAddr = "10.80.0.60";
   # eng-app and sec were pinned where DHCP first put them (inside the
   # pool) so existing T3 pairings keep their URLs. dnsmasq won't lease a
   # reserved address to anyone else. New instances use .2-.99.
@@ -90,10 +91,10 @@ in
 
   # --- Agent-to-agent T3 links ---------------------------------------------
   # Agents coordinate through `t3 environment link` (HOMELAB.md "Team").
-  # Links point down only, because a driven agent acts with its own
-  # credentials and egress: jr (no internet, no keys) must never drive eng
-  # or sec. T3's bearer gates a link; this enforces the direction at the
-  # network too.
+  # Links point down only (sec -> eng-app/test/jr, eng-app/test -> jr),
+  # because a driven agent acts with its own credentials and egress: jr
+  # (no internet, no keys) must never drive eng, test or sec. T3's bearer
+  # gates a link; this enforces the direction at the network too.
   #
   # A bridge-family table filters frames switched between instances on
   # incusbr0 directly. The inet forward chain above only sees that traffic
@@ -106,8 +107,8 @@ in
     content = ''
       chain forward {
         type filter hook forward priority filter; policy accept;
-        ip saddr ${secAddr} ip daddr { ${engAppAddr}, ${jrAddr} } tcp dport ${toString t3Port} accept
-        ip saddr ${engAppAddr} ip daddr ${jrAddr} tcp dport ${toString t3Port} accept
+        ip saddr ${secAddr} ip daddr { ${engAppAddr}, ${jrAddr}, ${testAddr} } tcp dport ${toString t3Port} accept
+        ip saddr { ${engAppAddr}, ${testAddr} } ip daddr ${jrAddr} tcp dport ${toString t3Port} accept
         tcp dport ${toString t3Port} drop
       }
     '';

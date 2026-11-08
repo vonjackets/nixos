@@ -24,10 +24,11 @@
   homelab.agentVm = {
     role = "sec";
     description = "DevSecOps engineer";
-    # Down-only links (HOMELAB.md "Team"): sec coordinates eng and jr.
+    # Down-only links (HOMELAB.md "Team"): sec coordinates eng, test and jr.
     t3Peers = {
       eng-app = { address = "10.80.0.126"; localPort = 47301; };
       jr = { address = "10.80.0.50"; localPort = 47302; };
+      test = { address = "10.80.0.60"; localPort = 47303; };
     };
   };
 
