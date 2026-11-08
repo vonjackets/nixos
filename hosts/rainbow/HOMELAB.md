@@ -370,8 +370,12 @@ What runs on its own (in the images, `hosts/common/agent-vm.nix`):
 
 - **Nix:** garbage collection during a build whenever free space drops
   below 3 GiB (until 10 GiB is free), plus a weekly `nix-gc`.
-- **`fstrim` daily.** Space freed inside a VM only returns to the pool
-  once the guest discards it. `incus exec <vm> -- fstrim -v /` does it
+- **Pool-pressure GC.** `min-free` only sees the VM's own thin disk, which
+  looks free while the pool fills. So when the host's pool feed says
+  `warn` (80%+), each VM collects its Nix garbage and trims, at most every
+  30 minutes, and logs what it freed (`journalctl -t homelab`).
+- **`fstrim` hourly.** Space freed inside a VM only returns to the pool
+  once the guest discards it. `incus exec <vm> -- fstrim -av` does it
   now.
 - **Podman (`test`):** `agent-podman-prune` hourly removes stopped
   containers, unused volumes and dangling images, and daily (03:00)
@@ -393,6 +397,53 @@ What stays manual:
   owns them).
 - **Check** with `incus storage info default | grep "space used"` and
   `incus info <vm>` (root and home usage).
+- **Agents see the pool too.** Inside a VM, `df` shows only that VM's
+  thin disk, which can look free while the pool is full. Every 2 minutes
+  the host (`homelab-pool-status` in `homelab.nix`) publishes the pool's
+  usage into each running VM's config (`user.homelab.pool`). The VM
+  copies it to `/run/homelab/pool` and logs a warning from 80% (critical
+  from 90%). Agents run `homelab-pool`. This uses the Incus guest API, so
+  there's no mount and nothing on the network.
+- **The pool is charged for blocks a VM hasn't trimmed.** After big
+  deletes, run `incus exec <vm> -- fstrim -av` rather than waiting for the
+  daily timer. On 2026-11-08 eng-app (an image older than the timer)
+  had the pool at 76 GiB; trimming it brought the pool back to 53 GiB.
+
+**GC roots: what a collection must not take.** A GC removes anything
+unrooted. In a lane VM that includes the Blitz `ci` shell (~5 GiB to
+fetch again) and the ACE flake input. ACE can't be refetched in a VM:
+`flake.nix` pins it over SSH to a server the VMs can't reach. Each VM
+has two roots under `~/.local/state/nix/profiles/` (the images set
+`keep-outputs`/`keep-derivations`, so these also keep the inputs behind
+them):
+
+```bash
+# inside the VM, as agent. path: because libgit2 can't read the virtiofs
+# /work (same bug as /ACE).
+cd /work
+nix develop --profile ~/.local/state/nix/profiles/blitz-ci "path:/work#ci" --command true
+# ACE at the rev flake.nix pins, from the local clone; same narHash, so
+# later evaluations find it in the store and never try SSH.
+R=$(grep -o 'ACE.git?rev=[0-9a-f]*' flake.nix | cut -d= -f2)
+P=$(nix flake archive --json path:/work \
+      --override-input ace "git+file:///home/agent/projects/ACE?rev=$R" | jq -r .inputs.ace.path)
+nix-store --realise "$P" --add-root ~/.local/state/nix/profiles/ace-src
+```
+
+**A re-roll wipes the store.** The Nix store is on the root disk, which a
+re-roll replaces; the roots above live on the home volume and are left
+pointing at nothing. The lane VMs (eng, sec, test) import
+`agents/common/blitz-lane.nix`, which installs this as `blitz-roots` and
+runs it at every boot (`systemd.services.blitz-roots`, as `agent`). So a
+re-roll costs one ~5 GiB shell download per VM, then heals itself.
+Run `blitz-roots` by hand when the lane bumps the `ci` shell or ACE's pin.
+On 2026-11-08 the module was added after the last re-roll, so the VMs
+have a hand-pushed copy at `~/.local/bin/blitz-roots` until their next
+re-roll (delete it then).
+
+**Agents don't run store-wide GC.** It needs root, and Codex's approval
+reviewer rightly declines it. The pool-pressure GC above is the
+mechanism.
 
 Still open: share one Nix store or binary cache across the VMs, so each
 one stops downloading and building the same closures.
@@ -407,9 +458,44 @@ T3 Code's reachability modes are:
 - `t3 serve --tailscale-serve` — Tailscale-fronted HTTPS. Preferred
   remote option once Tailscale is in the Nix config.
 
-For now, pair the Mac over LAN. When I add Tailscale, I'll switch to
-`--tailscale-serve` so the phone/laptop can reach the instances from
-outside the house without opening ports.
+### Phone access over Tailscale (2026-11-08)
+
+Rainbow is on the tailnet (`tail0c011d.ts.net`, `services.tailscale` in
+`system.nix`). The lane VMs (eng, sec, test) have
+`homelab.agentVm.tailscale = true`:
+
+- `tailscaled` keeps its node state on the home volume
+  (`~/.local/state/tailscale`, root-only, bind-mounted to
+  `/var/lib/tailscale`), so a re-roll keeps the device and its login.
+- `--operator=agent` lets T3 (running as `agent`) configure
+  `tailscale serve` itself.
+- `t3-serve` runs with `--lan --tailscale-serve`. Desktop pairings over
+  the bridge keep working, and the phone uses
+  `https://<name>.tail0c011d.ts.net`. If Tailscale isn't logged in, T3
+  logs "Failed to configure Tailscale Serve" and carries on with `--lan`.
+
+Tailnet prerequisites (admin console, mine): MagicDNS and **HTTPS
+certificates** on, and an ACL that tags the VMs `tag:agent`, lets my
+devices reach `tag:agent` on 443, and gives the agents nothing else.
+
+**Join a VM (once per home volume).** No auth key: I approve each
+device in the browser, so no credential passes through anyone.
+
+```bash
+# --operator=agent is required here too: `up` resets every pref it isn't
+# given, and T3 then gets "permission-denied" from `tailscale serve`.
+incus exec <inst> -- tailscale up --advertise-tags=tag:agent --hostname=<inst> --operator=agent
+# prints https://login.tailscale.com/a/...; open it, approve
+incus exec <inst> -- systemctl restart t3-serve   # now Serve gets configured
+incus exec <inst> -- tailscale serve status       # shows https://<inst>.<tailnet>.ts.net
+```
+
+**Pair the phone:** `incus exec <inst> -- su - agent -c 't3 pair'` in my
+own terminal, then in the T3 app add the environment at
+`https://<inst>.tail0c011d.ts.net` with that code. Start with `sec`.
+
+Later: move the agents' links onto the tailnet names and retire the
+loopback forwarders (TODO "Encrypt the T3 links").
 
 Git stays the sync layer. The home box holds the lane clones; the Mac
 pulls and pushes to the same remote. **One active writer per branch**,
@@ -706,6 +792,19 @@ don't update themselves; recreate them. **The home volume carries over**,
 so harness logins, T3 pairing, projects and links all survive. Only the
 root disk is replaced.
 
+Lessons from 2026-11-08:
+
+- **Scripted, close stdin** (`exec </dev/null` or `incus … </dev/null`).
+  Run without a terminal, `incus storage volume snapshot create` hung
+  for 10+ minutes with no operation on the server; with stdin closed it
+  takes milliseconds.
+- **Snapshot the home volume first**, verify the re-roll (links, logins,
+  `~/projects/ACE`, `homelab-pool`), then prune to one snapshot per
+  volume. Pick the one to keep by creation date
+  (`incus storage volume snapshot list … -f csv` column 2), not by
+  sorting names: mixed name formats sort wrongly under the locale, and
+  that deleted the newest one once.
+
 ```bash
 incus delete -f eng-app
 # then the `incus init` ... `incus start` block from "Launch and mount the
@@ -797,7 +896,8 @@ rm -rf ~/projects/blitz-app
   ergonomics). The agent roles are NixOS.
 - Secrets: `sops-nix` vs `agenix` for per-instance GitHub PATs.
 - Tailscale now or deferred? LAN pairing is fine while I'm at the desk;
-  Tailscale unlocks the phone/laptop case.
+  Tailscale unlocks the phone/laptop case. **Next up (2026-11-08):**
+  driving the team from the T3 mobile app.
 - Pinning strategy for `pkgs.t3code` given upstream's "very very early"
   warning. Probably a dedicated flake input tracking a known-good tag.
 - **Writable Nix store for lanes that build Rust.** A read-only
