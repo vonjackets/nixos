@@ -21,6 +21,8 @@
   homelab.agentVm = {
     role = "test";
     description = "Test engineer";
+    # Tailscale + T3 over Tailscale Serve, for the phone (HOMELAB.md).
+    tailscale = true;
     # Down-only links (HOMELAB.md "Team"): test hands low-risk work to jr.
     t3Peers.jr = { address = "10.80.0.50"; localPort = 47302; };
     # builder-cargo.sh puts its target dir in $HOME, outside /work.

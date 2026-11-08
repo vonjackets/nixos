@@ -14,6 +14,8 @@
   homelab.agentVm = {
     role = "eng";
     description = "Backend/systems engineer";
+    # Tailscale + T3 over Tailscale Serve, for the phone (HOMELAB.md).
+    tailscale = true;
     # Down-only links (HOMELAB.md "Team"): eng hands low-risk work to jr.
     # Instance-specific for now (eng-app); a second eng lane would need
     # its own peer set.

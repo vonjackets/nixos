@@ -92,6 +92,19 @@ in
       '';
     };
 
+    tailscale = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Join the tailnet and have T3 publish itself with Tailscale Serve
+        (HTTPS on <role>.<tailnet>.ts.net), so the T3 mobile app and other
+        tailnet devices can reach it. `--lan` stays on for the desktop
+        pairings. Node state lives on the home volume, so a re-roll keeps
+        the identity. The first join is interactive (HOMELAB.md, phone
+        access); the tailnet ACL decides who reaches it.
+      '';
+    };
+
     codexWritableRoots = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
@@ -284,8 +297,10 @@ in
       # incus-agent mounts disk devices; start after it so ${cfg.workDir}
       # is the real worktree, not the empty placeholder.
       after = [ "network-online.target" "incus-agent.service" ]
-        ++ lib.optional cfg.persistentHome "agent-home.service";
-      wants = [ "network-online.target" ];
+        ++ lib.optional cfg.persistentHome "agent-home.service"
+        ++ lib.optional cfg.tailscale "tailscaled.service";
+      wants = [ "network-online.target" ]
+        ++ lib.optional cfg.tailscale "tailscaled.service";
       requires = lib.optional cfg.persistentHome "agent-home.service";
       # Harnesses spawned by T3 need git, nix, sudo and themselves on PATH.
       path = [ "/run/wrappers" "/run/current-system/sw" ];
@@ -308,8 +323,13 @@ in
           "--lan"
           "--no-browser"
           "--port ${toString cfg.t3Port}"
-          cfg.workDir
-        ];
+        ]
+        # Publishes https://<role>.<tailnet>.ts.net via `tailscale serve`.
+        # If Tailscale isn't logged in yet, T3 logs "Failed to configure
+        # Tailscale Serve" and keeps serving on --lan (tested 2026-11-08);
+        # restart t3-serve after the first join.
+        + lib.optionalString cfg.tailscale " --tailscale-serve"
+        + " ${cfg.workDir}";
         Restart = "on-failure";
         RestartSec = 5;
       };
@@ -368,6 +388,26 @@ in
 
     system.stateVersion = lib.mkDefault "25.05";
   }
+  (lib.mkIf cfg.tailscale {
+    services.tailscale = {
+      enable = true;
+      # T3 runs as `agent` and configures `tailscale serve` itself.
+      extraSetFlags = [ "--operator=agent" ];
+      disableTaildrop = true;
+    };
+    # Node identity on the home volume, so a re-roll doesn't create a new
+    # tailnet device (and a new login). Root-only, inside agent's home.
+    systemd.services.tailscaled = lib.mkIf cfg.persistentHome {
+      after = [ "agent-home.service" ];
+      requires = [ "agent-home.service" ];
+      serviceConfig.BindPaths = [ "/home/agent/.local/state/tailscale:/var/lib/tailscale" ];
+    };
+    systemd.services.agent-home.script = lib.mkIf cfg.persistentHome (lib.mkAfter ''
+      [ -d /home/agent/.local ] || install -d -o agent -g users /home/agent/.local
+      [ -d /home/agent/.local/state ] || install -d -o agent -g users /home/agent/.local/state
+      install -d -m 0700 -o root -g root /home/agent/.local/state/tailscale
+    '');
+  })
   {
     # Loopback forwarders for T3 links (see the t3Peers option).
     systemd.sockets = lib.mapAttrs' (name: peer:

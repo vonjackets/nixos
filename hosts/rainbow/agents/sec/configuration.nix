@@ -24,6 +24,8 @@
   homelab.agentVm = {
     role = "sec";
     description = "DevSecOps engineer";
+    # Tailscale + T3 over Tailscale Serve, for the phone (HOMELAB.md).
+    tailscale = true;
     # builder-cargo.sh target dir for lane `hardening`, outside /work.
     codexWritableRoots = [ "/home/agent/blitz-target-hardening" ];
     # Down-only links (HOMELAB.md "Team"): sec coordinates eng, test and jr.
