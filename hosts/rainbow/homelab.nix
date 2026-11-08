@@ -113,4 +113,34 @@ in
       }
     '';
   };
+
+  # --- Pool status for the agents -----------------------------------------
+  # Inside a VM, `df` sees only its own thin disk, which can show free space
+  # while the shared Incus pool is full and writes fail (sec, 2026-11-08).
+  # Every 2 minutes, publish the pool's real usage into each running agent's
+  # config (`user.homelab.pool`). Guests read it through the Incus guest API
+  # into /run/homelab/pool (agent-vm.nix) and log a warning from 80%. Live,
+  # so no device or restart; nothing new is exposed on the network.
+  systemd.services.homelab-pool-status = {
+    description = "Publish Incus pool usage to the agent VMs";
+    after = [ "incus.service" ];
+    wants = [ "incus.service" ];
+    path = [ config.virtualisation.incus.clientPackage pkgs.jq pkgs.coreutils ];
+    serviceConfig.Type = "oneshot";
+    script = ''
+      r=$(incus query /1.0/storage-pools/default/resources)
+      used=$(jq '.space.used' <<<"$r")
+      total=$(jq '.space.total' <<<"$r")
+      pct=$(( used * 100 / total ))
+      status=ok
+      [ "$pct" -ge 80 ] && status=warn
+      [ "$pct" -ge 90 ] && status=critical
+      gib=1073741824
+      msg="pool=default used_pct=$pct used_gib=$(( used / gib )) total_gib=$(( total / gib )) status=$status updated=$(date -Iseconds)"
+      for i in $(incus list --project dev --format csv --columns n status=running); do
+        incus config set "$i" user.homelab.pool="$msg" --project dev || true
+      done
+    '';
+    startAt = "*:0/2";
+  };
 }

@@ -18,6 +18,9 @@
     # Instance-specific for now (eng-app); a second eng lane would need
     # its own peer set.
     t3Peers.jr = { address = "10.80.0.50"; localPort = 47302; };
+    # builder-cargo.sh puts its target dir in $HOME, outside /work. Lane
+    # `app` (eng-app); a second eng lane would need its own entry.
+    codexWritableRoots = [ "/home/agent/blitz-target-app" ];
   };
 
   # Frontier harnesses. Both are installed so the lead can compare models

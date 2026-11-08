@@ -66,5 +66,7 @@
   environment.systemPackages = with pkgs; [
     claude-code
     codex
+    # The stack-check scripts in Blitz src/scripts.
+    python3
   ];
 }

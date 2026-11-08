@@ -24,6 +24,8 @@
   homelab.agentVm = {
     role = "sec";
     description = "DevSecOps engineer";
+    # builder-cargo.sh target dir for lane `hardening`, outside /work.
+    codexWritableRoots = [ "/home/agent/blitz-target-hardening" ];
     # Down-only links (HOMELAB.md "Team"): sec coordinates eng, test and jr.
     t3Peers = {
       eng-app = { address = "10.80.0.126"; localPort = 47301; };
@@ -35,5 +37,9 @@
   environment.systemPackages = with pkgs; [
     claude-code
     codex
+    # Security scans, matching Blitz CI (sec memo 2026-11-08).
+    gitleaks
+    trivy
+    cargo-deny
   ];
 }

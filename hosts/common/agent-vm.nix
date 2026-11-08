@@ -144,6 +144,11 @@ in
       # cores each fit the CPU cap and leave memory for the harnesses.
       max-jobs = 2;
       cores = 2;
+      # A rooted dev shell (`nix develop --profile`) then also keeps the
+      # build inputs behind it, so a GC can't force a re-download of the
+      # ~5 GiB Blitz `ci` shell (sec, 2026-11-08).
+      keep-outputs = true;
+      keep-derivations = true;
     };
     # And a weekly sweep of dead paths, so idle VMs give space back too.
     nix.gc = {
@@ -152,9 +157,12 @@ in
     };
     # Freed blocks only return to the host pool once the guest discards
     # them; without this, deleting inside a VM never shrinks the pool.
+    # Hourly: a daily trim left a 5 GiB delete on test uncounted for 30+
+    # minutes with the pool at 77% (2026-11-08). The pool-pressure GC
+    # below also trims right after collecting.
     services.fstrim = {
       enable = true;
-      interval = "daily";
+      interval = "hourly";
     };
 
     # Give RAM back to the host. Guest RAM is memfd-backed (virtiofs needs
@@ -165,6 +173,44 @@ in
     # host within seconds: dropping a filled cache took one VM from
     # 5.4 GiB to 2.0 GiB. The cache only duplicates the host's own cache
     # of the same disk files, so drop clean page cache every 10 minutes.
+    # The host publishes the Incus pool's usage into each VM's config
+    # (`user.homelab.pool`, hosts/rainbow/homelab.nix); read it through the
+    # guest API (/dev/incus/sock, root only) into a world-readable file, and
+    # log a warning past 80%. `homelab-pool` prints it.
+    #
+    # Under pool pressure (warn, 80%+) it also collects this VM's Nix
+    # garbage and trims, at most every 30 minutes. `min-free` can't do
+    # this: it measures the VM's own thin disk, which looks free while the
+    # pool fills. Only unrooted paths go; lanes keep their dev shell with
+    # `nix develop --profile ~/.local/state/nix/profiles/<name>` (HOMELAB.md
+    # "Housekeeping"). Agents themselves don't run store-wide GC.
+    systemd.services.homelab-pool-status = {
+      description = "Copy the host's Incus pool status into /run/homelab/pool";
+      serviceConfig.Type = "oneshot";
+      path = [ pkgs.curl pkgs.coreutils pkgs.systemd pkgs.util-linux config.nix.package ];
+      script = ''
+        mkdir -p /run/homelab
+        s=$(curl -sf --unix-socket /dev/incus/sock \
+          http://incus/1.0/config/user.homelab.pool) || exit 0
+        printf '%s\n' "$s" > /run/homelab/pool.tmp
+        chmod 0644 /run/homelab/pool.tmp
+        mv /run/homelab/pool.tmp /run/homelab/pool
+        case "$s" in
+          *status=warn*|*status=critical*)
+            echo "Incus pool is filling: $s. Prune build dirs, containers and the Nix store." \
+              | systemd-cat -t homelab -p warning
+            stamp=/run/homelab/last-pressure-gc
+            if [ ! -e "$stamp" ] || [ $(( $(date +%s) - $(stat -c %Y "$stamp") )) -ge 1800 ]; then
+              touch "$stamp"
+              freed=$(nix-store --gc 2>&1 | tail -1)
+              fstrim -a >/dev/null 2>&1 || true
+              echo "pool-pressure GC: $freed; trimmed" | systemd-cat -t homelab -p notice
+            fi ;;
+        esac
+      '';
+      startAt = "*:0/2";
+    };
+
     systemd.services.guest-cache-drop = {
       description = "Drop clean page cache so free-page reporting returns it to the host";
       serviceConfig.Type = "oneshot";
@@ -302,6 +348,19 @@ in
       vim
       git
       jq
+      # Tools Blitz's scripts and checks call (sec's memo, 2026-11-08). From
+      # this repo's nixpkgs, whose versions match Blitz's pin except nufmt,
+      # which Blitz's own flake provides, so formatting matches CI exactly.
+      # Toolchains (Rust, ACE's shell) stay in the project flakes.
+      nushell
+      nu-lint
+      ripgrep
+      dhall-json
+      (writeShellScriptBin "homelab-pool" ''
+        # The shared Incus pool's real usage. `df` here only sees this VM's
+        # thin disk, which can show free space while the pool is full.
+        cat /run/homelab/pool 2>/dev/null || echo "no pool status yet (published by the host every 2 min)"
+      '')
       # Spare shell panes for poking at the VM; T3 itself no longer needs one.
       zellij
       t3code
