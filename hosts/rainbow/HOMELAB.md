@@ -376,8 +376,16 @@ What runs on its own (in the images, `hosts/common/agent-vm.nix`):
   looks free while the pool fills. So when the host's pool feed says
   `warn` (80%+), each VM collects its Nix garbage and trims, at most every
   30 minutes, and logs what it freed (`journalctl -t homelab`).
-- **`fstrim` hourly.** Space freed inside a VM only returns to the pool
-  once the guest discards it. `incus exec <vm> -- fstrim -av` does it
+- **Online discard on `/` and the home volume** (`discard` in their
+  mount options, from 2026-11-10 images). ext4 discards blocks as files
+  are deleted, so the pool shrinks at once. This was added because
+  builds free 5-8 GiB an hour, which the hourly trim couldn't keep up
+  with. On 2026-11-10 the pool sat at 83.7 GiB, sec and test stopped
+  work, and a manual trim of all four VMs recovered 8.5 GiB. A VM gets
+  this at its next re-roll; check with
+  `incus exec <vm> -- findmnt -no OPTIONS /`.
+- **`fstrim` hourly, as a backstop.** Space freed inside a VM only returns to the pool
+  once the guest discards it, and online discard can skip small extents. `incus exec <vm> -- fstrim -av` does it
   now.
 - **Podman (`test`):** `agent-podman-prune` hourly removes stopped
   containers, unused volumes and dangling images, and daily (03:00)

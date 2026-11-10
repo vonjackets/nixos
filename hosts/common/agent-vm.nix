@@ -177,6 +177,15 @@ in
       enable = true;
       interval = "hourly";
     };
+    # Online discard: ext4 discards blocks as files are deleted, so the
+    # pool shrinks immediately instead of at the next trim. The hourly trim
+    # couldn't keep up with builds: they free 5-8 GiB an hour, and the pool
+    # sat above 80% between trims until sec and test stopped work
+    # (2026-11-10, 83.7 GiB used; a manual trim recovered 8.5 GiB). The disks
+    # are files in the pool, so the cost of a synchronous discard is small.
+    # fstrim stays as a backstop: online discard can skip small extents.
+    # The incus VM module defines "/"; this list merges into its options.
+    fileSystems."/".options = [ "discard" ];
 
     # Give RAM back to the host. Guest RAM is memfd-backed (virtiofs needs
     # shared memory), so the host can't reclaim a guest's page cache, and
@@ -343,7 +352,8 @@ in
       device = "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_incus_home";
       fsType = "ext4";
       autoFormat = true;
-      options = [ "nofail" "x-systemd.device-timeout=30s" ];
+      # discard: see services.fstrim above.
+      options = [ "nofail" "x-systemd.device-timeout=30s" "discard" ];
     };
 
     # A freshly formatted volume's root is root-owned; hand it to agent.
