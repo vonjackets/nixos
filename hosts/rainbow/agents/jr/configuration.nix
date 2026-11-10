@@ -37,6 +37,12 @@ let
       models.${model} = {
         name = "OmniCoder 9B";
         tools = true;
+        # Thinking off (sent as reasoning_effort = "none"). With thinking
+        # on, the official GGUF often puts its final answer inside the
+        # reasoning and returns no text, so OpenCode and T3 show an empty
+        # reply. It also spent ~2k tokens thinking per turn, so tool tasks
+        # took 40-140 s; with thinking off, 3-5 s (2026-11-09).
+        options.reasoningEffort = "none";
       };
     };
     model = "ollama/${model}";

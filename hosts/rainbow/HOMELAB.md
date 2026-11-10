@@ -521,6 +521,20 @@ which gemma was never trained for.
   desktop running, the card uses 10.3 of its 12.3 GB.
 - **Smoke tests:** `PONG` through the proxy, and a read-only tool task
   (read `flake.nix`, name its dev shells) came back right in 7 seconds.
+- **Thinking is off** (`options.reasoningEffort = "none"` in jr's
+  OpenCode config, sent as `reasoning_effort`). With thinking on, the
+  official build often put its final answer inside the reasoning and
+  returned no text, so OpenCode and T3 showed an empty reply. It also
+  thought for ~2k tokens per turn, so tool tasks took 40-140 s; with
+  thinking off they take 2-5 s once warm. The community re-upload
+  didn't show this, probably because of a different chat template.
+- **Swapping weights under the same name:** `opencode run` attaches
+  to a background `opencode serve --service`, which keeps the config it
+  started with. After changing the model or its options, re-roll jr or
+  kill that daemon, or a test is still running the old setup. When
+  killing it from a `bash -c`, use the pattern
+  `[o]pencode-wrapped serve --service`, so `pkill` doesn't match the
+  shell's own command line.
 - **The verdict comes from real work:** sec routes two or three
   jr-sized pieces to it and reports how many finished without help,
   plus any malformed tool calls or lost threads. Record the result
@@ -548,10 +562,9 @@ ollama cp hf.co/Tesslate/OmniCoder-9B-GGUF:Q4_K_M omnicoder-9b
 ollama rm carstenuhlig/omnicoder-9b
 ```
 
-Prefer the model's own publisher over re-uploads. The current
-`omnicoder-9b` is an alias of the community upload
-`carstenuhlig/omnicoder-9b`, which was quicker to find. Swap in
-Tesslate's own build with the commands above. Hugging Face also has
+Prefer the model's own publisher over re-uploads. `omnicoder-9b` is
+now an alias of Tesslate's own build. The first trial used a community
+re-upload (`carstenuhlig/omnicoder-9b`), since removed. Hugging Face also has
 "abliterated"/"heretic" variants with the safety tuning stripped; those
 don't belong on an agent. A model name in jr's config must match
 `ollama list` exactly, or every request 404s: OpenCode doesn't add
@@ -1011,8 +1024,9 @@ rm -rf ~/projects/blitz-app
 - **Model for `jr`**: started on `gemma4:12b`; `omnicoder-9b` on trial
   since 2026-11-09 (gpt-oss-20b as fallback). Record what was tried and
   how it did on real forwarded tasks:
-  - *omnicoder-9b, 2026-11-09:* smoke tests pass (PONG, one clean
-    read-only tool call). Waiting on sec's report from real tasks.
+  - *omnicoder-9b, 2026-11-09:* smoke tests pass (PONG; a read-only
+    tool task, 2-5 s warm) on Tesslate's official Q4_K_M, with thinking
+    off (with it on, replies came back empty). Waiting on sec's report from real tasks.
 
 ## References
 
