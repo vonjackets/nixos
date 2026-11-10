@@ -23,7 +23,8 @@ into each instance's T3 server and surfaces them as separate
 - **Display**: Samsung Neo G9 57" (7680×2160, 240 Hz)
 
 That GPU caps local inference at roughly a 20B-class model at 4-bit
-(~12 GiB VRAM); `jr` runs `gemma4:12b` (~8 GB). The
+(~12 GiB VRAM); `jr` runs `omnicoder-9b` (~5.7 GB; on trial, see
+"Model server"). The
 120b-class models are out. 32 GiB of system RAM is comfortable for
 Ollama + k3s + a game, but tight once agent VMs are layered on top (each
 `agent` profile VM is capped at 8 GiB); see `STATUS.md` for the memory
@@ -87,7 +88,8 @@ Notes on the table:
   Only a harness that's logged in inside that VM can be used, so having
   a package installed doesn't spread any credential. Once a winner per
   role is clear, drop the other from that role's `configuration.nix`.
-- **`jr`'s model is `gemma4:12b`** (Q4_K_M, ~8 GB, tool-capable). OpenCode
+- **`jr`'s model is `omnicoder-9b`** (Q4_K_M, ~5.7 GB, on trial against
+  `gemma4:12b`; see "Model server"). OpenCode
   points at an Ollama OpenAI-compatible endpoint. Its config is baked into
   the image, limited to that one local model.
 - **Reviews.** `sec` is the reviewer. A second opinion from `jr` is
@@ -173,7 +175,7 @@ merge, and can't apply to a cluster. Those are mine.
         ▼       │        ▼
      eng-app    │      test   Claude Code; implementation / verification
         │       ▼        │
-        └────▶  jr  ◀────┘    OpenCode + gemma4:12b; low-risk pieces
+        └────▶  jr  ◀────┘    OpenCode + omnicoder-9b; low-risk pieces
 ```
 
 `test` was launched 2026-11-08; see "Suggested order" for its status.
@@ -202,7 +204,7 @@ next turn. Each link:
 **Picking models.** T3 projects have no default model, so whoever starts
 a thread names one. `eng-app`/`sec`/`test`: provider `claudeAgent`, e.g.
 `claude-sonnet-5-5` or `claude-opus-5-5`. `jr`: provider `opencode`,
-model `ollama/gemma4:12b` (the only one it offers).
+model `ollama/omnicoder-9b` (the only one it offers).
 
 **Verified 2026-11-07:** `sec`'s Claude found `jr` over its link, started
 a thread on gemma, waited, and relayed `PONG`, in about 35s, with no
@@ -217,7 +219,7 @@ You coordinate an agent team for the lead (me) who is watching and primarily res
 Your linked environments: eng-app (backend/systems engineer, Claude Code,
 lane clone /work on lane/app), test (test engineer, Claude Code, lane
 clone /work on lane/test; once launched) and jr (junior engineer,
-OpenCode with ollama/gemma4:12b, lane clone /work on lane/jr,
+OpenCode with ollama/omnicoder-9b, lane clone /work on lane/jr,
 lowest-risk work only). Read /lead/AGENTS.md and
 /lead/docs/lanes/README.md first. Team rules on top of those: links
 point down (you -> eng-app/test/jr, eng-app/test -> jr); questions go
@@ -510,13 +512,50 @@ point at any OpenAI-compatible endpoint, which is what Ollama / llama.cpp
 expose on `infer`. The `jr` instance then reaches `infer` over the
 bridge, with the egress ACL blocking everything else.
 
-**Model**: `gemma4:12b` (11.9B, Q4_K_M, 8.0 GB on disk; capabilities
-include tools and thinking). It's already pulled into the host's Ollama.
+**Model (on trial since 2026-11-09)**: `omnicoder-9b`, which is
+OmniCoder-9B: Tesslate's fine-tune of Qwen3.5-9B on coding-agent
+traces (tool calls, read-edit-test loops), Apache 2.0, Q4_K_M, 5.7 GB.
+It's on trial because jr's work is mostly driving OpenCode's tools,
+which gemma was never trained for.
+- **Memory:** fully on the GPU at 6.4 GB with 32k context. With the
+  desktop running, the card uses 10.3 of its 12.3 GB.
+- **Smoke tests:** `PONG` through the proxy, and a read-only tool task
+  (read `flake.nix`, name its dev shells) came back right in 7 seconds.
+- **The verdict comes from real work:** sec routes two or three
+  jr-sized pieces to it and reports how many finished without help,
+  plus any malformed tool calls or lost threads. Record the result
+  under "Open questions".
+
+**The previous model**: `gemma4:12b` (11.9B, Q4_K_M, 8.0 GB on disk;
+tools and thinking). It used about 11.4 GB of VRAM at 32k context
+with the desktop running, too tight for a game alongside, which is
+what the gamemode hook is for. It has been removed from the host. To
+compare the two, pull it again (`ollama pull gemma4:12b`) and change
+`model` in `agents/jr/configuration.nix`. The fallback beyond both is
+gpt-oss-20b.
+
 Ollama's default context is 4096 tokens, too small for an agent, so the
-host sets `OLLAMA_CONTEXT_LENGTH=32768`. Measured with the model fully on
-the GPU: about 11.4 GB of the 12.3 GB VRAM, with the 7680×2160 desktop
-running. A game alongside won't fit, which is what the gamemode hook is
-for. If gemma falls short on real tasks, gpt-oss-20b is the fallback.
+host sets `OLLAMA_CONTEXT_LENGTH=32768` for every model.
+
+**Getting a model from Hugging Face.** Ollama pulls GGUF files from
+Hugging Face directly, with the quantization as the tag:
+
+```bash
+ollama pull hf.co/Tesslate/OmniCoder-9B-GGUF:Q4_K_M
+# jr's config names `omnicoder-9b`, so point that name at it (no copy:
+# the blobs are shared), then drop whatever it replaced.
+ollama cp hf.co/Tesslate/OmniCoder-9B-GGUF:Q4_K_M omnicoder-9b
+ollama rm carstenuhlig/omnicoder-9b
+```
+
+Prefer the model's own publisher over re-uploads. The current
+`omnicoder-9b` is an alias of the community upload
+`carstenuhlig/omnicoder-9b`, which was quicker to find. Swap in
+Tesslate's own build with the commands above. Hugging Face also has
+"abliterated"/"heretic" variants with the safety tuning stripped; those
+don't belong on an agent. A model name in jr's config must match
+`ollama list` exactly, or every request 404s: OpenCode doesn't add
+`:latest` or the publisher prefix.
 
 **Status: `jr` uses the host's Ollama for now** (`hosts/rainbow/homelab.nix`):
 
@@ -747,6 +786,63 @@ git -C ~/projects/blitz fetch ../blitz-app lane/app:lane/app
 # then review / merge in my own checkout as usual.
 ```
 
+### One ACE clone per VM (rule, 2026-11-09)
+
+Each lane VM has exactly one ACE repository, `~/projects/ACE`: a
+clone of `/ACE`, which is the host's `~/projects/ACE`.
+
+- **Do:** work on branches in that clone.
+- **Don't:** make second clones, `git worktree`s, or a `cp -r` of it.
+
+Why:
+
+- `blitz-roots` re-seeds the Blitz `ci` shell's ACE input from that
+  clone at boot, so it has to exist and stay a real clone.
+- Every extra copy costs space on the 10 GiB home volume.
+- With more than one copy, nobody can tell which tree is current.
+  eng-app grew three: `ACE`, an `ACE-deploy` cloned from it, and an
+  `ACE-on-main` worktree of that.
+
+Agents can't push: `/ACE` is a read-only mount. Hand-offs are memos
+naming a branch and SHA in `~/projects/ACE`. Update the clone with
+`git -C ~/projects/ACE fetch origin` and fast-forward from there.
+
+### Bringing ACE work back (host)
+
+The VM's home is a block volume, so its git repositories aren't on the
+host's filesystem. Move commits as a bundle. Never run git inside the
+VM's repository from the host: same reason as for lane clones.
+
+```bash
+exec </dev/null
+# 1. In the VM: bundle the named branches. A bundle needs ref names, not
+#    bare SHAs ("empty bundle"); make a temporary branch if a memo
+#    names only a SHA.
+incus exec eng-app --project dev --user 1000 --env HOME=/home/agent -- \
+  bash -lc 'cd ~/projects/ACE && git bundle create /tmp/ace.bundle deploy/port-fork deploy/on-main'
+incus file pull eng-app/tmp/ace.bundle /tmp/ace.bundle --project dev
+incus exec eng-app --project dev -- rm -f /tmp/ace.bundle
+
+# 2. On the host: verify, fetch into a side namespace, and check that
+#    every move is a fast-forward before touching a branch.
+cd ~/projects/ACE
+git bundle verify /tmp/ace.bundle
+git fetch /tmp/ace.bundle 'refs/heads/*:refs/eng/*'
+git merge-base --is-ancestor deploy/on-main refs/eng/deploy/on-main && echo ff
+git update-ref refs/heads/deploy/on-main refs/eng/deploy/on-main <old-sha>   # old value guards the move
+for r in $(git for-each-ref refs/eng --format='%(refname)'); do git update-ref -d $r; done
+rm /tmp/ace.bundle
+
+# 3. Back in the VM, the clone catches up from origin (/ACE).
+incus exec eng-app --project dev --user 1000 --env HOME=/home/agent -- \
+  bash -lc 'git -C ~/projects/ACE fetch origin'
+```
+
+Pushing to SEI's server is the lead's. Watch the names: the local
+`port/public-polar/blitz-deploy` (slash) tracks the server's
+`port/public-polar-blitz-deploy` (dash), so give the push an explicit
+refspec: `git push origin port/public-polar/blitz-deploy:port/public-polar-blitz-deploy`.
+
 ### Pair
 
 `t3-serve.service` is already running. No zellij pane is needed.
@@ -912,8 +1008,11 @@ rm -rf ~/projects/blitz-app
   exfiltration channel. Options: an nftables input rule refusing DNS from
   `10.80.0.50` (it only needs the proxy, by IP), or per-instance dnsmasq
   config. Low priority while `jr` only gets low-risk tasks.
-- **Model for `jr`**: `gemma4:12b` to start (gpt-oss-20b as fallback). Record
-  what was tried and how it did on real forwarded tasks.
+- **Model for `jr`**: started on `gemma4:12b`; `omnicoder-9b` on trial
+  since 2026-11-09 (gpt-oss-20b as fallback). Record what was tried and
+  how it did on real forwarded tasks:
+  - *omnicoder-9b, 2026-11-09:* smoke tests pass (PONG, one clean
+    read-only tool call). Waiting on sec's report from real tasks.
 
 ## References
 

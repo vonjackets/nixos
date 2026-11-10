@@ -3,8 +3,9 @@
 # Takes the lowest-risk tasks the lead forwards: small fixes, lint
 # cleanups, test scaffolding, second-opinion reviews where a miss is
 # cheap. Works in its own clone at /work like the other roles, but its
-# model runs locally — gemma4:12b (Q4_K_M, ~8 GB) via Ollama's
-# OpenAI-compatible endpoint — so it needs no frontier API credentials
+# model runs locally — omnicoder-9b (OmniCoder-9B, a Qwen3.5-9B agentic-coding
+# fine-tune; Q4_K_M, ~5.7 GB; on trial against gemma4:12b since 2026-11-09)
+# via Ollama's OpenAI-compatible endpoint — so it needs no frontier API credentials
 # and no internet egress at all.
 #
 # Until `infer` exists, the endpoint is the host's Ollama, reached
@@ -16,7 +17,7 @@
 { pkgs, ... }:
 let
   ollamaBaseURL = "http://10.80.0.1:11434/v1";
-  model = "gemma4:12b";
+  model = "omnicoder-9b";
 
   # Baked OpenCode config (no per-user state to set up after a re-roll).
   # The OpenAI-compatible adapter is bundled in the package — verified it
@@ -34,7 +35,7 @@ let
       name = "Ollama (rainbow)";
       options.baseURL = ollamaBaseURL;
       models.${model} = {
-        name = "Gemma 4 12B";
+        name = "OmniCoder 9B";
         tools = true;
       };
     };

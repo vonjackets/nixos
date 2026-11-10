@@ -24,7 +24,7 @@ Rainbow is the primary Linux dev + gaming workstation, and since
 - **Audio:** PipeWire with 32-bit ALSA support for Steam
 - **Gaming stack:** Steam + gamescope session, gamemode, MangoHud,
   protonup-qt, Lutris, xpadneo (Xbox controller)
-- **Services:** Ollama (CUDA, `gemma4:12b`, 32k context), k3s, Incus
+- **Services:** Ollama (CUDA, `omnicoder-9b` for jr, on trial, 32k context), k3s, Incus
   (agent VMs), Podman with Docker-compat socket
 - **Power:** suspend/hibernate disabled (always-on desktop); CPU on
   `amd_pstate` active, EPP `balance_performance`
