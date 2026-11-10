@@ -504,6 +504,21 @@ incus exec <inst> -- tailscale serve status       # shows https://<inst>.<tailne
 own terminal, then in the T3 app add the environment at
 `https://<inst>.tail0c011d.ts.net` with that code. Start with `sec`.
 
+**The host's own T3 (the sysadmin thread) is on port 8443:**
+`https://rainbow.tail0c011d.ts.net:8443`, set up 2026-11-09 with
+`tailscale serve --bg --https=8443 http://127.0.0.1:3773`. That port is
+the desktop app's server. The serve config persists in tailscaled's
+state.
+
+Not 443: k3s's bundled Traefik (ServiceLB) holds 443 on every
+interface, including `tailscale0`, and answers before Tailscale Serve
+does, presenting `TRAEFIK DEFAULT CERT`. The old `:443` serve entry
+is dead; remove it with `tailscale serve --https=443 off`.
+
+Pair the phone with the host the same way as with a VM: run `t3 pair`
+in my own terminal on rainbow. The ACL must let my devices reach
+`rainbow:8443`.
+
 Later: move the agents' links onto the tailnet names and retire the
 loopback forwarders (TODO "Encrypt the T3 links").
 
