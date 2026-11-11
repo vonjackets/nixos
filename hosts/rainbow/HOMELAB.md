@@ -916,6 +916,51 @@ directories. Roll back code with git in the lane (`git reset --hard
 origin/main` inside the VM, or discard the lane branch), not with
 `snapshot restore`.
 
+### Day to day: `vm` in nushell
+
+`hosts/rainbow/programs/nushell/homelab.nu` (autoloaded on rainbow) wraps
+the commands below. With no names, each acts on every instance in `dev`.
+
+- `vm ls`: state, address and newest backup of each VM, plus pool usage.
+- `vm up [vm...]`: start them.
+- `vm down [vm...] [-t 120]`: clean shutdown. A VM that doesn't stop in
+  time is reported, never forced. Check no agent is mid-turn first.
+- `vm backup [vm...] [-k 2]`: export each home volume (see below).
+- `vm watch [-r 3sec]`: live dashboard (nushell's built-in `tui`). Pool
+  bar, host memory, GPU, and per VM: CPU %, memory, root and home use,
+  disk writes, backup age. Data is one `incus query /1.0/metrics` per
+  refresh (guest-side, via the Incus agent; stopped VMs show none). Keys
+  act on the highlighted VM: `u` up, `d` down (asks first), `b` backup,
+  `s`/Enter shell. In zellij they open floating panes, so the dashboard
+  keeps running. The `rainbow` zellij layout (`zr`) runs it in the
+  homelab tab and next to btop in the monitor tab.
+
+### Backups
+
+Snapshots live in the pool, so they don't survive losing it, and they
+grow the pool as a home changes. `vm backup` exports each **home volume**
+(logins, T3 state and links, `~/projects`) to
+`~/backups/homelab/<vm>/home-<vm>-<stamp>.tar.gz` on the host disk:
+`incus storage volume export --volume-only`. The root disk comes from the
+image, so it isn't backed up. It refuses running VMs (`vm down` first),
+so ext4 is clean. Writes go to `.part` and are renamed on success; only
+then are older files pruned to the newest `--keep` (default 2). jr's home
+took 13 s and 26 MB (2026-11-10).
+
+**These files hold harness login tokens.** `~/backups/homelab` is 0700;
+don't copy them off the host or into the store.
+
+Restore (not yet drilled):
+
+```bash
+vm down jr
+incus storage volume import --project dev default \
+  ~/backups/homelab/jr/home-jr-<stamp>.tar.gz home-jr-restored
+incus config device set --project dev jr home source=home-jr-restored
+vm up jr   # check logins, `t3 environment list`, ~/projects
+incus storage volume delete --project dev default home-jr   # once it checks out
+```
+
 ### Re-rolling the image
 
 When a role's `configuration.nix` or `hosts/common/agent-vm.nix`

@@ -13,6 +13,11 @@
     };
   };
 
+  # `vm ls | up | down | backup` for the agent VMs (HOMELAB.md). Nushell
+  # sources ~/.config/nushell/autoload/*.nu after config.nu, so this
+  # stays out of the shared config: other hosts have no homelab.
+  xdg.configFile."nushell/autoload/homelab.nu".source = ./programs/nushell/homelab.nu;
+
   # Rainbow-only Zed override: turn on the Agent 2 panel so we can drive
   # AI-assisted edits from the editor instead of a terminal session.
   # Merges with common/home.nix userSettings at the top level — `agent` is
