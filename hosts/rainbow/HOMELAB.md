@@ -192,7 +192,7 @@ next turn. Each link:
 - runs at the access I picked for its target, never full access. A
   driven agent edits its own lane clone without asking anyone.
   `eng-app` and `test` are linked at **`auto`**; `jr` at
-  **`auto-accept-edits`** (it hasn't earned more), from every source.
+  **`auto-accept-edits`** from every source. 2026-11-10: `sec` → `jr` was raised to `auto` and lowered again the same evening, after jr met a `nix shell` timeout by trying `curl … | sh` installers (one from a third-party site) instead of stopping. Only jr's lack of internet stopped them; nothing landed. jr gets no shell work at `auto`.
 - goes over a **loopback forwarder** in the upper VM
   (`http://127.0.0.1:4730x`, from `homelab.agentVm.t3Peers`). T3 only
   links over plain http to loopback or Tailscale, so the link token
