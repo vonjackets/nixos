@@ -1,5 +1,7 @@
 // Sysadmin workspace for rainbow and its homelab. Open with `zr` (nushell),
 // i.e. `zellij attach --create rainbow` with this layout the first time.
+// `vm watch` comes from hosts/rainbow/programs/nushell/homelab.nu; its
+// keys (u/d/b/s) open floating panes in this session.
 layout {
     default_tab_template {
         pane size=1 borderless=true {
@@ -11,15 +13,20 @@ layout {
         pane cwd="~/projects/nixos"
     }
     tab name="homelab" {
-        pane split_direction="vertical" size="40%" {
-            pane name="agents" command="watch" {
-                args "-n" "10" "incus" "list" "--project" "dev" "-c" "nsmu"
-            }
-            pane name="pressure" command="watch" {
-                args "-n" "30" "sh" "-c" "free -h; echo; cat /proc/pressure/memory; echo; incus storage info default | grep -E 'space used|total space'; df -h / | tail -1"
-            }
+        // nu -e loads config.nu and the autoload dir (where `vm` lives), runs
+        // the dashboard, then leaves a shell when you quit it.
+        pane name="vm watch" size="55%" command="nu" {
+            args "-e" "vm watch"
         }
         pane cwd="~/projects/nixos"
+    }
+    tab name="monitor" {
+        pane split_direction="vertical" {
+            pane name="btop" size="60%" command="btop"
+            pane name="vm watch" command="nu" {
+                args "-e" "vm watch"
+            }
+        }
     }
     tab name="blitz" {
         pane cwd="~/projects/blitz"
