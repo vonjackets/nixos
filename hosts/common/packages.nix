@@ -26,6 +26,7 @@ in
     atuin
     mask
     just
+    btop
     # -- OpenSSL --
     cacert
     dropbear

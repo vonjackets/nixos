@@ -113,6 +113,10 @@
     # Installed on the host so the CLI is here for pairing + triage; each
     # agent instance will install its own t3 inside the VM.
     t3code
+    # btop with the NVIDIA driver on its runpath, so its GPU box shows the
+    # 4070 (plain btop can't find libnvidia-ml). No CUDA toolkit involved.
+    # hiPrio: it wins over the plain btop from common/packages.nix.
+    (lib.hiPrio btop-cuda)
   ];
 
   services.ollama = {
