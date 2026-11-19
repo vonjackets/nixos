@@ -16,9 +16,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.home-manager.follows = "home-manager";
     };
+    st8ks = {
+      url = "github:vonjackets/st8ks";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, nixpkgs-mozilla, claude-code, rust-overlay, plasma-manager, ... }:
+  outputs = { self, nixpkgs, home-manager, nixpkgs-mozilla, claude-code, rust-overlay, plasma-manager, st8ks, ... }:
   let
     sharedOverlays = [
       rust-overlay.overlays.default
@@ -46,6 +50,7 @@
   {
     nixosConfigurations.rainbow = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
+      specialArgs = { inherit st8ks; };
       modules = sharedModules ++ [
         ./hosts/rainbow/hardware-configuration.nix
         ./hosts/rainbow/system.nix

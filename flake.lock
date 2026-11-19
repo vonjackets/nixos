@@ -116,7 +116,8 @@
         "nixpkgs": "nixpkgs_2",
         "nixpkgs-mozilla": "nixpkgs-mozilla",
         "plasma-manager": "plasma-manager",
-        "rust-overlay": "rust-overlay"
+        "rust-overlay": "rust-overlay",
+        "st8ks": "st8ks"
       }
     },
     "rust-overlay": {
@@ -136,6 +137,26 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "st8ks": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1794253222,
+        "narHash": "sha256-wl92QCX6wKI67eQuy+Q2lnB8NfLia+7tPBU1hp+Njas=",
+        "owner": "vonjackets",
+        "repo": "st8ks",
+        "rev": "126adb63ac9de26448716a46d099ea081ca13740",
+        "type": "github"
+      },
+      "original": {
+        "owner": "vonjackets",
+        "repo": "st8ks",
         "type": "github"
       }
     },

@@ -24,7 +24,8 @@ Rainbow is the primary Linux dev + gaming workstation, and since
 - **Audio:** PipeWire with 32-bit ALSA support for Steam
 - **Gaming stack:** Steam + gamescope session, gamemode, MangoHud,
   protonup-qt, Lutris, xpadneo (Xbox controller)
-- **Services:** Ollama (CUDA, `omnicoder-9b` for jr, on trial, 32k context), k3s, Incus
+- **Services:** Ollama (CUDA, `omnicoder-9b` for jr, on trial, 32k context;
+  started by hand, not at boot), k3s, Incus
   (agent VMs), Podman with Docker-compat socket
 - **Power:** suspend/hibernate disabled (always-on desktop); CPU on
   `amd_pstate` active, EPP `balance_performance`
@@ -35,8 +36,8 @@ Gaming (`system.nix`, `common/gaming.nix`):
 
 - **Kernel:** zen (BORE scheduler) for mixed gaming + desktop load.
 - **gamemode:** renice, screensaver inhibit, NVIDIA PowerMizer max
-  performance while a game runs; start/end hooks stop and restart Ollama
-  to free VRAM.
+  performance while a game runs; start/end hooks stop Ollama and restart it
+  afterwards only if it was running, to free VRAM.
 - **NVIDIA/Proton env:** 10 GB GL shader disk cache, `PROTON_ENABLE_NVAPI=1`
   (DLSS Frame Generation), `nvidia-vaapi-driver` for NVDEC video decode,
   KWin VRR cursor delay for the Neo G9 taskbar flicker.

@@ -1,4 +1,20 @@
 { pkgs, ... }:
+let
+  systemctl = "${pkgs.systemd}/bin/systemctl";
+  # Marker so the end hook only restarts an Ollama the start hook stopped.
+  marker = "\${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/gamemode-stopped-ollama";
+  ollamaPause = pkgs.writeShellScript "gamemode-ollama-pause" ''
+    if ${systemctl} is-active --quiet ollama.service; then
+      ${systemctl} stop ollama.service && touch "${marker}"
+    fi
+  '';
+  ollamaResume = pkgs.writeShellScript "gamemode-ollama-resume" ''
+    if [ -e "${marker}" ]; then
+      rm -f "${marker}"
+      ${systemctl} start ollama.service
+    fi
+  '';
+in
 {
   programs.steam = {
     enable = true;
@@ -25,12 +41,13 @@
         gpu_device = 0;
         nv_powermizer_mode = 1;
       };
-      # Free the 4070's 12 GB for the game by stopping Ollama while a game
-      # runs; restart it after. Relies on the polkit rule below allowing the
+      # Free the GPU's VRAM by stopping Ollama while a game runs, and restart
+      # it afterwards only if it was running before (Ollama is started by
+      # hand, not at boot). Relies on the polkit rule below allowing the
       # gaming user to manage ollama.service without a password prompt.
       custom = {
-        start = "${pkgs.systemd}/bin/systemctl stop ollama.service";
-        end = "${pkgs.systemd}/bin/systemctl start ollama.service";
+        start = "${ollamaPause}";
+        end = "${ollamaResume}";
       };
     };
   };

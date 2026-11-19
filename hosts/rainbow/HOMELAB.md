@@ -432,9 +432,12 @@ them):
 # /work (same bug as /ACE).
 cd /work
 nix develop --profile ~/.local/state/nix/profiles/blitz-ci "path:/work#ci" --command true
-# ACE at the rev flake.nix pins, from the local clone; same narHash, so
-# later evaluations find it in the store and never try SSH.
-R=$(grep -o 'ACE.git?rev=[0-9a-f]*' flake.nix | cut -d= -f2)
+# ACE at the rev flake.lock pins, from the local clone; same narHash, so
+# later evaluations find it in the store and never try SSH. Redo this
+# whenever the pin moves: first `git -C ~/projects/ACE fetch origin` (origin
+# is /ACE), since the pin may be on a branch other than main. Never point
+# the override at /ACE itself: libgit2 can't read the virtiofs mount.
+R=$(jq -r .nodes.ace.locked.rev flake.lock)
 P=$(nix flake archive --json path:/work \
       --override-input ace "git+file:///home/agent/projects/ACE?rev=$R" | jq -r .inputs.ace.path)
 nix-store --realise "$P" --add-root ~/.local/state/nix/profiles/ace-src
@@ -601,7 +604,8 @@ don't belong on an agent. A model name in jr's config must match
   address) and forwards to Ollama through `systemd-socket-proxyd`.
 - The host firewall admits only `jr`'s pinned address (`10.80.0.50`) to
   that port. `eng`, `sec` and `test` can't reach it.
-- While a game is running (gamemode stops `ollama.service`), `jr`'s
+- Ollama no longer starts at boot: `systemctl start ollama` before
+  running `jr`. While a game is running (gamemode stops it), `jr`'s
   requests fail until it's back.
 
 OpenCode's config is baked into the `jr` image at
